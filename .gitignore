@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+coverage/
+
+# Next.js
+.next/
+.vinext/
+out/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# environment variables
+.env*
+
+# deployment / generated
+.vercel/
+dist/
+.wrangler/
+outputs/
+work/
+
+# local temporary files
+tmp/
