@@ -1,3 +1,6 @@
+# xiaoyuji
+A collaborative development repository for 小宇记 — a personal journaling and memory app.
+
 # vinext-starter
 
 A clean full-stack starter running on
