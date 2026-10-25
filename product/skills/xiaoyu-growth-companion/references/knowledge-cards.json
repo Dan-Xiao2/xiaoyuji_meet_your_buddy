@@ -1,0 +1,525 @@
+{
+  "schemaVersion": "1.0",
+  "cards": [
+    {
+      "id": "respond-to-signals",
+      "title": "看见并回应",
+      "ageBands": ["0-1"],
+      "deliveryMode": "parent_assisted",
+      "domain": "social_and_emotional",
+      "purpose": "帮助家长留意婴儿声音、表情和动作，并及时回应。",
+      "observeSignals": ["看向熟悉的人", "用声音或动作继续互动", "在回应后逐渐安定"],
+      "companionMoves": ["请家长描述刚才看到的一个信号", "给出一种温和回应", "提醒等待婴儿下一次反应"],
+      "offlineAction": {
+        "title": "你一下我一下",
+        "materials": ["无需材料"],
+        "steps": ["面对面等一个声音或动作", "轻轻模仿一次", "停下来等新的回应"],
+        "durationMinutes": 3
+      },
+      "avoid": ["要求婴儿完成指令", "把沉默解释为能力不足"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-UNICEF-POSITIVE-PARENTING"]
+    },
+    {
+      "id": "talk-during-care",
+      "title": "照护时慢慢说",
+      "ageBands": ["0-1"],
+      "deliveryMode": "parent_assisted",
+      "domain": "language_and_communication",
+      "purpose": "把喂养、换洗和穿衣变成自然交流。",
+      "observeSignals": ["听到声音后停顿", "看向说话的人", "发出新的声音"],
+      "companionMoves": ["建议家长说出正在做的一个动作", "使用温和短句", "避免连续刺激"],
+      "offlineAction": {
+        "title": "我正在帮你",
+        "materials": ["日常照护用品"],
+        "steps": ["照护前先告诉孩子要做什么", "做动作时说一个关键词", "完成后停下来看看孩子"],
+        "durationMinutes": 3
+      },
+      "avoid": ["播放长时间教学音频", "要求模仿发音"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022"]
+    },
+    {
+      "id": "safe-sensory-exploration",
+      "title": "安全触摸小探索",
+      "ageBands": ["0-1"],
+      "deliveryMode": "parent_assisted",
+      "domain": "science_and_thinking",
+      "purpose": "通过安全材质和声音支持真实感官探索。",
+      "observeSignals": ["伸手触摸", "追随缓慢移动物体", "重复敲碰或抓握"],
+      "companionMoves": ["一次只建议一种安全材料", "让家长跟随孩子兴趣", "提醒全程看护"],
+      "offlineAction": {
+        "title": "摸一摸软和硬",
+        "materials": ["干净软毛巾", "大号安全杯"],
+        "steps": ["把两件物品放在孩子可触及处", "让孩子自由选择", "家长说出触感并等待"],
+        "durationMinutes": 4
+      },
+      "avoid": ["小物件", "绳带", "强光强声", "把材料放入口中无人看护"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-NHC-ECD-SERVICE-0-3-2024"]
+    },
+    {
+      "id": "floor-movement-play",
+      "title": "地面自由动一动",
+      "ageBands": ["0-1"],
+      "deliveryMode": "parent_assisted",
+      "domain": "health_and_independence",
+      "purpose": "在安全地面空间中支持自发身体活动。",
+      "observeSignals": ["转头或伸手", "改变身体姿势", "尝试接近感兴趣的物体"],
+      "companionMoves": ["提醒清理危险物", "让家长陪在伸手可及处", "跟随孩子已有动作"],
+      "offlineAction": {
+        "title": "看见就靠近",
+        "materials": ["干净地垫", "大号软玩具"],
+        "steps": ["把软玩具放在安全可见位置", "给孩子自由活动时间", "家长回应每一次尝试"],
+        "durationMinutes": 5
+      },
+      "avoid": ["强迫固定姿势", "使用不适合年龄的器械", "离开看护范围"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022"]
+    },
+    {
+      "id": "peekaboo-and-cause",
+      "title": "藏起来又出现",
+      "ageBands": ["0-1", "1-2"],
+      "deliveryMode": "parent_assisted",
+      "domain": "science_and_thinking",
+      "purpose": "通过重复、有回应的游戏探索出现、消失和因果。",
+      "observeSignals": ["等待再次出现", "主动拉开遮挡", "用表情或声音要求继续"],
+      "companionMoves": ["建议家长慢一点并等待", "跟随孩子是否愿意继续", "用简单词描述变化"],
+      "offlineAction": {
+        "title": "小玩具去哪了",
+        "materials": ["大号安全玩具", "薄布"],
+        "steps": ["把玩具部分盖住", "等孩子寻找或示意", "一起掀开并说找到了"],
+        "durationMinutes": 4
+      },
+      "avoid": ["遮盖孩子口鼻", "突然惊吓", "孩子拒绝后继续"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-NHC-ECD-SERVICE-0-3-2024"]
+    },
+    {
+      "id": "expand-and-wait",
+      "title": "接一句，再等一等",
+      "ageBands": ["1-2", "2-3"],
+      "deliveryMode": "shared_device_with_parent",
+      "domain": "language_and_communication",
+      "purpose": "接住孩子的词、声音或手势，并用稍完整的短句扩展。",
+      "observeSignals": ["主动指认", "尝试重复或增加词语", "用手势继续表达"],
+      "companionMoves": ["先复述孩子表达", "只增加一个信息", "至少留出一次等待"],
+      "offlineAction": {
+        "title": "你说，我接",
+        "materials": ["一个孩子正在玩的物品"],
+        "steps": ["孩子说或指一个东西", "家长把它扩成一个短句", "停下来等孩子接续"],
+        "durationMinutes": 3
+      },
+      "avoid": ["连续纠音", "要求完整复述", "把手势当成无效回答"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-UNICEF-POSITIVE-PARENTING"]
+    },
+    {
+      "id": "picture-book-dialogue",
+      "title": "一起看看图里发生什么",
+      "ageBands": ["1-2", "2-3", "3-4"],
+      "deliveryMode": "shared_device_with_parent",
+      "domain": "language_and_communication",
+      "purpose": "通过看图、等待和共同讲述支持自然表达。",
+      "observeSignals": ["指向图中细节", "给角色命名", "预测或补充情节"],
+      "companionMoves": ["从孩子注意的画面开始", "一次只问一个问题", "接受不同讲法"],
+      "offlineAction": {
+        "title": "这一页你发现了什么",
+        "materials": ["一本已有图画书"],
+        "steps": ["让孩子选一页", "跟着孩子指的地方说", "一起给画面加一句话"],
+        "durationMinutes": 6
+      },
+      "avoid": ["考查记忆", "逐页提问", "未经许可复制现代图书内容"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-MOE-ELDG-3-6-2012"]
+    },
+    {
+      "id": "pretend-play",
+      "title": "假装一下会怎样",
+      "ageBands": ["1-2", "2-3", "3-4", "4-5"],
+      "deliveryMode": "shared_device_with_parent",
+      "domain": "social_and_emotional",
+      "purpose": "通过角色和日常情节表达想法、关系与感受。",
+      "observeSignals": ["给物品赋予角色", "模仿日常行动", "邀请别人加入情节"],
+      "companionMoves": ["接受孩子设定", "用角色问一个开放问题", "邀请孩子决定下一步"],
+      "offlineAction": {
+        "title": "今天谁来当店长",
+        "materials": ["安全家庭物品"],
+        "steps": ["孩子选角色", "用物品搭一个小场景", "轮流说一句角色的话"],
+        "durationMinutes": 8
+      },
+      "avoid": ["规定唯一剧情", "纠正想象不符合现实", "强迫孩子表演"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018"]
+    },
+    {
+      "id": "two-safe-choices",
+      "title": "两个都可以的选择",
+      "ageBands": ["1-2", "2-3", "3-4"],
+      "deliveryMode": "parent_assisted",
+      "domain": "health_and_independence",
+      "purpose": "在安全边界内支持孩子表达意愿和参与日常生活。",
+      "observeSignals": ["用语言或动作选择", "改变选择", "尝试自己完成一部分"],
+      "companionMoves": ["只提供两个真实可行选项", "确认孩子的选择", "给足行动时间"],
+      "offlineAction": {
+        "title": "今天你来选",
+        "materials": ["两件合适的衣物或两种活动材料"],
+        "steps": ["成人给出两个都可接受的选择", "孩子选择", "让孩子参与完成下一步"],
+        "durationMinutes": 5
+      },
+      "avoid": ["虚假选择", "选后羞辱或反复劝改", "把服从当成长"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-UNICEF-POSITIVE-PARENTING"]
+    },
+    {
+      "id": "outdoor-movement",
+      "title": "到外面动一动",
+      "ageBands": ["1-2", "2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "parent_assisted",
+      "domain": "health_and_independence",
+      "purpose": "把身体活动与真实环境观察结合起来。",
+      "observeSignals": ["尝试新的动作", "调整速度或路线", "主动发现周围事物"],
+      "companionMoves": ["依据年龄给一个简单动作", "提醒成人检查环境", "活动后请孩子说一个发现"],
+      "offlineAction": {
+        "title": "走一条发现路线",
+        "materials": ["安全户外空间"],
+        "steps": ["成人选一段安全路线", "孩子用走、跨或绕的方式前进", "停下说一个看到或听到的东西"],
+        "durationMinutes": 10
+      },
+      "avoid": ["靠近车流水域无人看护", "竞技排名", "忽略天气和身体状态"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-MOE-ELDG-3-6-2012"]
+    },
+    {
+      "id": "simple-family-helper",
+      "title": "一起做一件家里小事",
+      "ageBands": ["1-2", "2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "parent_assisted",
+      "domain": "health_and_independence",
+      "purpose": "让孩子以适龄方式参与家庭生活并形成自主感。",
+      "observeSignals": ["模仿一个步骤", "主动继续", "完成后描述自己的贡献"],
+      "companionMoves": ["把任务缩成一个可完成步骤", "允许慢和不完美", "具体感谢孩子的参与"],
+      "offlineAction": {
+        "title": "今天的小帮手",
+        "materials": ["安全家务材料"],
+        "steps": ["孩子选择一件小事", "成人示范一个步骤", "一起完成并收好材料"],
+        "durationMinutes": 7
+      },
+      "avoid": ["接触火、电、刀具和清洁剂", "返工羞辱", "把家务变成奖惩"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING"]
+    },
+    {
+      "id": "tell-me-one-moment",
+      "title": "今天的一件小事",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "language_and_communication",
+      "purpose": "让孩子按自己的意愿回忆和表达一天中的一个片段。",
+      "observeSignals": ["主动选择事件", "加入人物或先后信息", "表达自己当时的感受"],
+      "companionMoves": ["从孩子第一句话接续", "最多追问一个具体细节", "不盘问幼儿园情况"],
+      "offlineAction": {
+        "title": "画下这一刻",
+        "materials": ["纸", "画笔"],
+        "steps": ["孩子选一个刚说到的画面", "自由画下来", "想说时给家长讲一句"],
+        "durationMinutes": 8
+      },
+      "avoid": ["要求完整日报", "暗示某件事一定发生过", "自动保存敏感家庭信息"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING"]
+    },
+    {
+      "id": "why-to-observation",
+      "title": "把为什么变成小观察",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "science_and_thinking",
+      "purpose": "先保护问题，再用可观察的小步骤共同探索。",
+      "observeSignals": ["提出自己的猜想", "比较前后变化", "根据看到的结果调整说法"],
+      "companionMoves": ["承认不知道也可以", "邀请孩子先猜", "设计一个安全、可见的小观察"],
+      "offlineAction": {
+        "title": "先猜再看看",
+        "materials": ["与问题相关的安全家庭物品"],
+        "steps": ["孩子说一个猜想", "成人一起做一次安全观察", "比较结果和原来的想法"],
+        "durationMinutes": 8
+      },
+      "avoid": ["编造确定答案", "危险实验", "用术语长讲替代观察"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018"]
+    },
+    {
+      "id": "compare-count-real-things",
+      "title": "用真的东西比一比",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "science_and_thinking",
+      "purpose": "在生活中探索数量、形状、大小和分类。",
+      "observeSignals": ["提出自己的分类办法", "一一对应地数", "发现分类规则可以改变"],
+      "companionMoves": ["让孩子先决定怎样比较", "只在需要时提示", "接受多种合理分类"],
+      "offlineAction": {
+        "title": "三样东西怎么分",
+        "materials": ["3至6个安全日常物品"],
+        "steps": ["孩子挑选物品", "按一种办法分组", "再想一种不同分法"],
+        "durationMinutes": 7
+      },
+      "avoid": ["刷题", "限时竞赛", "只接受成人预设答案"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012"]
+    },
+    {
+      "id": "friend-perspective",
+      "title": "他可能怎么想",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "social_and_emotional",
+      "purpose": "在真实或故事情境中练习表达感受和理解不同观点。",
+      "observeSignals": ["说出自己感受", "想到另一种可能", "提出协商或修复办法"],
+      "companionMoves": ["先确认孩子的感受", "不替对方断言动机", "邀请想一个可尝试的下一步"],
+      "offlineAction": {
+        "title": "换个角色说一说",
+        "materials": ["两个玩偶或两个安全物品"],
+        "steps": ["用物品代表两个角色", "孩子说自己的版本", "愿意时换角色再说一句"],
+        "durationMinutes": 6
+      },
+      "avoid": ["逼孩子原谅", "断言谁是坏孩子", "替代成人处理欺凌或安全问题"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING"]
+    },
+    {
+      "id": "open-art-expression",
+      "title": "让作品长成自己的样子",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "art_and_expression",
+      "purpose": "用颜色、声音、动作和材料表达感受与想象。",
+      "observeSignals": ["自主选择材料", "解释作品中的想法", "改变或组合表现方式"],
+      "companionMoves": ["问孩子最想从哪里开始", "描述看到的选择而非评判好坏", "邀请孩子决定是否分享"],
+      "offlineAction": {
+        "title": "给今天画一种声音",
+        "materials": ["纸", "画笔"],
+        "steps": ["想一个今天听到的声音", "用线条和颜色画它", "愿意时表演或讲给家长听"],
+        "durationMinutes": 8
+      },
+      "avoid": ["统一范画", "要求像不像", "把整洁当作艺术能力"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018"]
+    },
+    {
+      "id": "self-care-challenge",
+      "title": "我想自己试一小步",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "health_and_independence",
+      "purpose": "把自理任务拆成孩子可尝试的一小步。",
+      "observeSignals": ["主动选择步骤", "遇到困难后调整", "需要时清楚求助"],
+      "companionMoves": ["让孩子选一个步骤", "先等待再提示", "具体看见过程而非只看完成"],
+      "offlineAction": {
+        "title": "今天自己来一步",
+        "materials": ["当前日常用品"],
+        "steps": ["选穿衣、整理或洗漱中的一步", "孩子先尝试", "需要时成人只帮最难部分"],
+        "durationMinutes": 6
+      },
+      "avoid": ["危险家务", "失败羞辱", "不顾孩子状态强求独立"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING"]
+    },
+    {
+      "id": "name-and-accept-emotion",
+      "title": "感受可以先被听见",
+      "ageBands": ["1-2", "2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "shared_device_with_parent",
+      "domain": "social_and_emotional",
+      "purpose": "帮助孩子用自己的方式表达感受，并与行为边界区分。",
+      "observeSignals": ["用词语、表情或动作表达", "接受一种安定方式", "后来愿意补充发生了什么"],
+      "companionMoves": ["先接住感受", "不声称已准确识别情绪", "必要时给两个安定选择"],
+      "offlineAction": {
+        "title": "我的身体在告诉我",
+        "materials": ["无需材料"],
+        "steps": ["孩子愿意时指出身体哪里有感觉", "成人用孩子的词回应", "一起选择抱一抱、安静坐或走一走"],
+        "durationMinutes": 5
+      },
+      "avoid": ["根据声音自动诊断情绪", "要求立刻停止哭", "用分心否定感受"],
+      "sourceIds": ["CN-UNICEF-POSITIVE-PARENTING", "CN-MOE-ELDG-3-6-2012"]
+    },
+    {
+      "id": "child-led-play",
+      "title": "跟着孩子玩一会儿",
+      "ageBands": ["1-2", "2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "parent_assisted",
+      "domain": "social_and_emotional",
+      "purpose": "让成人短时间跟随孩子的注意和玩法，增加自然交流。",
+      "observeSignals": ["持续投入自己选择的玩法", "邀请成人参与", "改变规则或材料"],
+      "companionMoves": ["提醒成人少提问多描述", "模仿孩子的安全玩法", "把主导权还给孩子"],
+      "offlineAction": {
+        "title": "十分钟你来带路",
+        "materials": ["孩子已有玩具或材料"],
+        "steps": ["孩子选择玩什么", "成人跟随并描述", "结束前请孩子决定最后一步"],
+        "durationMinutes": 10
+      },
+      "avoid": ["不断教学和纠正", "抢走主导权", "用问题轰炸孩子"],
+      "sourceIds": ["CN-UNICEF-POSITIVE-PARENTING", "CN-NHC-CARE-0-3-2022", "OER-COC-ECE-CURRICULUM-2018"]
+    },
+    {
+      "id": "story-to-real-world",
+      "title": "把故事带到现实里",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "art_and_expression",
+      "purpose": "让故事成为绘画、表演、寻找和亲子交流的起点。",
+      "observeSignals": ["改变故事情节", "把角色带入游戏", "用材料表现一个场景"],
+      "companionMoves": ["故事讲到可行动处就停", "让孩子选择一种现实延伸", "下一次从孩子作品或讲述接续"],
+      "offlineAction": {
+        "title": "给故事做一个小道具",
+        "materials": ["纸", "画笔", "安全可回收材料"],
+        "steps": ["孩子选一个角色或物品", "用现有材料做或画出来", "拿着它演故事下一小段"],
+        "durationMinutes": 10
+      },
+      "avoid": ["长时间连续播放", "要求复述标准情节", "复制受版权保护故事全文"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018"]
+    },
+    {
+      "id": "responsive-back-and-forth",
+      "title": "接住一句，再说一点",
+      "ageBands": ["1-2", "2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "shared_device_with_parent",
+      "domain": "language_and_communication",
+      "purpose": "用轮流、共同注意和一点点扩展支持孩子自然表达。",
+      "observeSignals": ["孩子主动发起声音、词语或话题", "愿意再接一句", "把成人补充的信息带进后续表达"],
+      "companionMoves": ["先复述孩子正在说的重点", "只增加一个新信息", "停下来等孩子决定是否继续"],
+      "offlineAction": {
+        "title": "轮到你说",
+        "materials": ["孩子正在看的物品"],
+        "steps": ["孩子指向或说出一个东西", "成人用短句接住并增加一个词", "停下来等孩子回应或换话题"],
+        "durationMinutes": 4
+      },
+      "avoid": ["把词汇数量当目标", "连续纠正发音", "用提问轰炸孩子"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-UNICEF-POSITIVE-PARENTING", "NASEM-PARENTING-MATTERS-2016"],
+      "inspiredByBookIds": ["LOCAL-BOOK-004", "LOCAL-BOOK-310"],
+      "reviewNote": "书籍只提供内部线索；运行时依据已登记的官方和研究共识来源。"
+    },
+    {
+      "id": "shared-reading-follow-child",
+      "title": "读到孩子注意的地方",
+      "ageBands": ["1-2", "2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "shared_device_with_parent",
+      "domain": "language_and_communication",
+      "purpose": "把故事和图画书变成共同注意、表达和想象的机会。",
+      "observeSignals": ["孩子主动指向画面", "给人物或物品命名", "改变或补充故事情节"],
+      "companionMoves": ["从孩子注意的画面开始", "一次只回应一个细节", "接受孩子自己的讲法"],
+      "offlineAction": {
+        "title": "这一页你看到了什么",
+        "materials": ["家里已有的图画书"],
+        "steps": ["让孩子选一页", "跟着孩子指的地方描述", "停下来让孩子补一句或换一页"],
+        "durationMinutes": 6
+      },
+      "avoid": ["考查识字量", "要求复述标准答案", "复制受版权保护的整本故事"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018"],
+      "inspiredByBookIds": ["LOCAL-BOOK-010", "LOCAL-BOOK-004"],
+      "reviewNote": "AI 讲故事时只做短段落和提问，鼓励孩子回到身边的书、画或现实物品。"
+    },
+    {
+      "id": "observe-interest-without-label",
+      "title": "记录反复出现的兴趣",
+      "ageBands": ["2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "parent_assisted",
+      "domain": "science_and_thinking",
+      "purpose": "帮助家长看见孩子正在反复探索什么，同时保留不确定性。",
+      "observeSignals": ["在不同日子再次提到同一主题", "主动寻找相关物品或信息", "对同一主题提出了新的问题"],
+      "companionMoves": ["保存孩子的原话或作品", "标注日期和场景", "使用‘可能正在关注’而不是固定标签"],
+      "offlineAction": {
+        "title": "把兴趣放进小篮子",
+        "materials": ["一个小盒子或相册"],
+        "steps": ["家长保存一个与孩子兴趣有关的原话、照片或画", "写下日期和孩子当时在做什么", "过几天再看是否出现了新的变化"],
+        "durationMinutes": 5
+      },
+      "avoid": ["使用敏感期作为发展量表", "一次行为就下结论", "把没有记录解释成退步"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-CHILD-GROWTH-2018"],
+      "inspiredByBookIds": ["LOCAL-BOOK-015", "LOCAL-BOOK-023"],
+      "reviewNote": "吸收观察视角，不吸收敏感期时间窗或固定阶段标签。"
+    },
+    {
+      "id": "draw-and-talk",
+      "title": "请孩子讲讲自己的画",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "art_and_expression",
+      "purpose": "把绘画留存为孩子自己解释的成长片段，而不是成人解读测试。",
+      "observeSignals": ["孩子为画面命名", "主动补充人物或故事", "愿意决定保存、修改或丢弃"],
+      "companionMoves": ["先问‘你愿意讲讲吗’", "按孩子的解释保存一句原话", "把成人观察和孩子原话分开"],
+      "offlineAction": {
+        "title": "这幅画在说什么",
+        "materials": ["纸", "画笔"],
+        "steps": ["孩子自由画一个刚才想到的东西", "孩子愿意时说出画里的一个部分", "家长保存画和一句原话"],
+        "durationMinutes": 8
+      },
+      "avoid": ["根据颜色或构图做心理诊断", "要求画得像", "未经同意保存或分享作品"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING"],
+      "inspiredByBookIds": ["LOCAL-BOOK-051", "LOCAL-BOOK-023"],
+      "reviewNote": "孩子的解释是证据，成人对画的猜测不是证据。"
+    },
+    {
+      "id": "cooperative-problem-solving",
+      "title": "一起想三个办法",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "child_voice",
+      "domain": "social_and_emotional",
+      "purpose": "在同伴冲突或合作困难中练习表达需要、理解他人和提出多个办法。",
+      "observeSignals": ["孩子说出自己的需要", "能提出不止一个办法", "愿意考虑办法对别人有什么影响"],
+      "companionMoves": ["先听完孩子的版本", "只问一个开放问题", "让孩子选择现实中愿意尝试的办法"],
+      "offlineAction": {
+        "title": "如果下次再遇到",
+        "materials": ["两个玩偶或日常物品"],
+        "steps": ["孩子讲一个简单情境", "用玩偶演出两个可能办法", "孩子选一个愿意试的办法"],
+        "durationMinutes": 8
+      },
+      "avoid": ["要求孩子总是让步", "把外向或服从当作社会能力", "替孩子决定谁对谁错"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING", "OER-COC-ECE-CURRICULUM-2018"],
+      "inspiredByBookIds": ["LOCAL-BOOK-060"],
+      "reviewNote": "不复制课程脚本；只保留情境、轮流和多方案思考的低风险结构。"
+    },
+    {
+      "id": "repair-after-disconnection",
+      "title": "没接住，也可以重新来",
+      "ageBands": ["1-2", "2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "parent_assisted",
+      "domain": "social_and_emotional",
+      "purpose": "帮助家长在错过回应、发生冲突或分离后，用简单方式重新连接。",
+      "observeSignals": ["孩子愿意重新靠近或表达", "成人能具体说出刚才发生的事", "双方一起决定一个小的下一步"],
+      "companionMoves": ["先承认刚才没有听见或太着急", "不要求孩子立刻原谅", "给一个可选的重新开始方式"],
+      "offlineAction": {
+        "title": "我们重新说一遍",
+        "materials": ["无需材料"],
+        "steps": ["成人用一句话承认刚才发生了什么", "问孩子愿意现在说、抱一抱还是晚一点", "按孩子选择结束这一轮"],
+        "durationMinutes": 4
+      },
+      "avoid": ["声称已经准确识别孩子情绪", "把关系修复变成道歉表演", "要求孩子马上平静"],
+      "sourceIds": ["CN-UNICEF-POSITIVE-PARENTING", "NASEM-PARENTING-MATTERS-2016"],
+      "inspiredByBookIds": ["LOCAL-BOOK-107", "LOCAL-BOOK-124"],
+      "reviewNote": "吸收‘先连接再解决’的顺序，不使用未经核对的脑科学确定性说法。"
+    },
+    {
+      "id": "kindergarten-transition-ritual",
+      "title": "回家后的一个固定问候",
+      "ageBands": ["3-4", "4-5", "5-6"],
+      "deliveryMode": "parent_assisted",
+      "domain": "social_and_emotional",
+      "purpose": "给入园和回家后的交流一个稳定入口，尊重孩子当下是否想说。",
+      "observeSignals": ["孩子主动分享一件小事", "孩子能用自己的方式表达想休息或继续", "家长记录了具体场景而非泛泛评价"],
+      "companionMoves": ["使用同一个简短问候", "允许孩子只说一个词、画一下或暂时不说", "结束时感谢分享而不盘问"],
+      "offlineAction": {
+        "title": "今天留下一颗小星星",
+        "materials": ["纸和笔，或家长手机"],
+        "steps": ["家长问‘今天有哪一刻想留给我们’", "孩子可以说、画或不回答", "只保存孩子愿意留下的一句话或画面"],
+        "durationMinutes": 5
+      },
+      "avoid": ["要求完整汇报幼儿园一天", "根据沉默推断在园发生了问题", "把分享次数当作成长指标"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING", "NASEM-PARENTING-MATTERS-2016"],
+      "inspiredByBookIds": ["LOCAL-BOOK-103", "LOCAL-BOOK-124"],
+      "reviewNote": "把记录变成可珍藏的选择，不把家长端变成监控报告。"
+    },
+    {
+      "id": "hands-on-choice-exploration",
+      "title": "先让孩子选怎么探索",
+      "ageBands": ["2-3", "3-4", "4-5", "5-6"],
+      "deliveryMode": "parent_assisted",
+      "domain": "science_and_thinking",
+      "purpose": "把 AI 的解释变成真实材料上的动手观察和孩子自己的选择。",
+      "observeSignals": ["孩子选择材料或方法", "能描述一个看到的变化", "根据结果提出新的尝试"],
+      "companionMoves": ["只提供安全且有限的材料", "先问孩子想怎么试", "把解释缩成一个可观察的问题"],
+      "offlineAction": {
+        "title": "你想先试哪一个",
+        "materials": ["3件安全日常物品"],
+        "steps": ["让孩子选一种比较或摆放办法", "一起观察一个变化", "孩子愿意时换一种办法再试"],
+        "durationMinutes": 7
+      },
+      "avoid": ["把蒙氏活动当作唯一正确方法", "复制受版权保护的完整练习", "使用小物件、火、电或危险液体"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018", "CN-NHC-ECD-SERVICE-0-3-2024"],
+      "inspiredByBookIds": ["LOCAL-BOOK-309", "LOCAL-BOOK-310"],
+      "reviewNote": "吸收真实材料、选择和动手的方向，具体活动由小宇记重新设计。"
+    }
+  ]
+}

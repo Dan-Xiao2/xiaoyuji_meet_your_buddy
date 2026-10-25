@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小宇记语音白板状态测试</title>
+    <link rel="stylesheet" href="../src/styles/base.css" />
+    <link rel="stylesheet" href="../src/styles/components.css" />
+    <link rel="stylesheet" href="../src/styles/responsive.css" />
+  </head>
+  <body>
+    <main class="workspace" data-active-view="learn">
+      <section class="child-stage" id="childStage" data-layout="whiteboard" aria-label="语音白板测试">
+        <div class="child-session-bar">
+          <span>素素</span>
+          <button class="quiet-link" type="button">结束</button>
+        </div>
+        <article class="child-voice-dock" data-voice-phase="ready" aria-label="语音对话">
+          <button class="voice-orb child-voice-orb" type="button" aria-label="按住小宇说话">
+            <span class="xiaoyu-talk-visual">
+              <span class="xiaoyu-listening-shadow" aria-hidden="true"></span>
+              <img class="xiaoyu-talk-character" src="../assets/xiaoyu-planet.png" alt="" />
+            </span>
+            <strong class="xiaoyu-talk-label">按住小宇说话</strong>
+          </button>
+        </article>
+        <article class="child-whiteboard-panel" aria-label="视觉白板">
+          <div class="whiteboard child-whiteboard" id="whiteboard"></div>
+        </article>
+      </section>
+    </main>
+    <script src="../node_modules/motion/dist/motion.js"></script>
+    <script src="../node_modules/roughjs/bundled/rough.js"></script>
+    <script type="module">
+      import { renderWhiteboard } from "../src/ui/whiteboard.js";
+
+      renderWhiteboard(document.querySelector("#whiteboard"), {
+        type: "science",
+        variant: "sky",
+        title: "天空为什么是蓝色？",
+        items: ["太阳光", "空气", "蓝色光"],
+        question: "蓝色光更容易被空气散开，所以我们抬头看到一大片蓝。",
+        note: "去窗边看看今天的天空。"
+      });
+    </script>
+  </body>
+</html>

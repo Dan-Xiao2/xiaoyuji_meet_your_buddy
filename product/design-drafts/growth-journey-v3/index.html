@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小宇记 · 成长足迹设计稿</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="review-shell">
+      <header class="review-heading">
+        <div>
+          <span>小宇记 · 成长足迹</span>
+          <h1>少一点报告，多一点看见</h1>
+        </div>
+        <div class="state-switcher" role="group" aria-label="切换数据阶段">
+          <button type="button" data-state="first" aria-pressed="true">1 天</button>
+          <button type="button" data-state="weeks" aria-pressed="false">2 周</button>
+          <button type="button" data-state="long" aria-pressed="false">长期</button>
+        </div>
+      </header>
+
+      <section class="prototype-stage">
+        <div class="phone-frame">
+          <header class="app-bar">
+            <button class="menu-button" type="button" aria-label="打开菜单" aria-expanded="false">
+              <span></span><span></span><span></span>
+            </button>
+            <a class="brand" href="#" aria-label="小宇记首页">
+              <img src="../../assets/xiaoyu-planet.png" alt="" />
+              <strong>小宇记</strong>
+            </a>
+            <span class="app-bar-spacer" aria-hidden="true"></span>
+          </header>
+
+          <div class="drawer-scrim" hidden></div>
+          <aside class="app-drawer" aria-hidden="true" aria-label="更多页面">
+            <div class="drawer-brand">
+              <img src="../../assets/xiaoyu-planet.png" alt="" />
+              <strong>焘焘的小宇宙</strong>
+            </div>
+            <nav>
+              <a href="#"><span class="nav-mark is-chat"></span>一起聊</a>
+              <a class="is-current" href="#"><span class="nav-mark is-growth"></span>成长足迹</a>
+              <a href="#"><span class="nav-mark is-family"></span>家庭设置</a>
+              <a href="#"><span class="nav-mark is-backup"></span>备份记录</a>
+            </nav>
+          </aside>
+
+          <div class="phone-content" id="phoneContent">
+            <section class="growth-header">
+              <p id="periodLabel">今天</p>
+              <h2>焘焘的成长</h2>
+              <span id="recordSummary">刚刚开始</span>
+            </section>
+
+            <section class="discovery-card" aria-labelledby="discoveryTitle">
+              <div class="discovery-copy">
+                <p>最近的小发现</p>
+                <h3 id="discoveryTitle">今天，他反复聊到小猫，也试着确认小宇有没有听见。</h3>
+              </div>
+              <div class="discovery-doodle" aria-hidden="true">
+                <span class="doodle-head"></span>
+                <span class="doodle-ear left"></span>
+                <span class="doodle-ear right"></span>
+                <span class="doodle-tail"></span>
+              </div>
+            </section>
+
+            <section class="exploration-section" aria-labelledby="explorationTitle">
+              <div class="section-heading">
+                <div>
+                  <p>探索过的地方</p>
+                  <h3 id="explorationTitle">今天</h3>
+                </div>
+                <div class="period-control" id="periodControl" role="group" aria-label="回看周期" hidden>
+                  <button type="button" data-period="week" aria-pressed="true">7 天</button>
+                  <button type="button" data-period="month" aria-pressed="false">30 天</button>
+                </div>
+              </div>
+
+              <div class="chart-wrap" id="chartWrap"></div>
+              <div class="domain-legend" aria-label="探索领域">
+                <span><i class="color-nature"></i>自然</span>
+                <span><i class="color-expression"></i>表达</span>
+                <span><i class="color-people"></i>相处</span>
+                <span><i class="color-story"></i>故事</span>
+              </div>
+            </section>
+
+            <section class="change-section" id="changeSection" aria-labelledby="changeTitle" hidden>
+              <div class="section-heading">
+                <div>
+                  <p>小小变化</p>
+                  <h3 id="changeTitle">他表达得更完整了</h3>
+                </div>
+              </div>
+              <div class="change-path" id="changePath"></div>
+            </section>
+
+            <section class="keepsake-section" id="keepsakeSection" aria-labelledby="keepsakeTitle" hidden>
+              <div class="keepsake-mark" aria-hidden="true">★</div>
+              <div>
+                <p>珍藏瞬间 · <time id="keepsakeDate">8 月 29 日</time></p>
+                <blockquote id="keepsakeTitle">“我想给小猫搭一个不会淋雨的家。”</blockquote>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <aside class="design-notes" aria-label="当前设计原则">
+          <p class="note-index" id="noteIndex">01</p>
+          <h2 id="noteTitle">一天只讲一件事</h2>
+          <p id="noteBody">不生成周报和月报。先让家长看见孩子今天在意什么。</p>
+          <div class="note-rule"></div>
+          <span>完整对话与下载移到“备份记录”</span>
+        </aside>
+      </section>
+    </main>
+    <script src="./script.js"></script>
+  </body>
+</html>

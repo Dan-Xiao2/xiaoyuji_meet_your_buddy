@@ -1,0 +1,4 @@
+interface:
+  display_name: "小宇记成长陪伴"
+  short_description: "为0-6岁儿童生成有来源、非排名的成长陪伴与家长建议"
+  default_prompt: "使用 $xiaoyu-growth-companion 为这个孩子设计一次适龄陪伴，并说明依据和安全边界。"

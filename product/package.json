@@ -1,0 +1,36 @@
+{
+  "name": "xiaoyuji-learning-companion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "check:skill": "node skills/xiaoyu-growth-companion/scripts/validate-knowledge.mjs",
+    "check:architecture": "node .agents/skills/archify/bin/archify.mjs validate architecture docs/architecture/xiaoyuji-runtime.architecture.json --quality showcase",
+    "architecture:build": "node .agents/skills/archify/bin/archify.mjs deliver architecture docs/architecture/xiaoyuji-runtime.architecture.json docs/architecture/xiaoyuji-runtime.architecture.html --quality showcase",
+    "architecture:visual-check": "node .agents/skills/archify/bin/archify.mjs visual-check docs/architecture/xiaoyuji-runtime.architecture.html --json",
+    "check:archive": "node --test tests/archive-operations.test.mjs tests/indexed-archive.test.mjs tests/archive-integrity.test.mjs",
+    "check:voice": "node --test tests/voice-latency.test.mjs tests/voice-capture.test.mjs tests/microphone-input.test.mjs tests/realtime-asr.test.mjs tests/conversation-consistency.test.mjs tests/exploration-pipeline.test.mjs tests/enrichment-state.test.mjs tests/app-store.test.mjs tests/conversation-controller.test.mjs tests/conversation-commit.test.mjs",
+    "check:growth": "node --test tests/growth-period.test.mjs tests/student-schema.test.mjs",
+    "check:safety": "node --test tests/child-safety.test.mjs",
+    "check:server": "node --test tests/server-boundary.test.mjs",
+    "check:browser": "node --test tests/browser-runtime.test.mjs && node scripts/run-critical-browser-checks.mjs",
+    "check:release": "npm run check && npm run check:browser",
+    "eval:model": "node scripts/benchmark-real-model.mjs --live --allow-paid-api",
+    "eval:model:images": "node scripts/benchmark-real-model.mjs --live --allow-paid-api --include-images",
+    "eval:safety": "node scripts/evaluate-child-safety.mjs",
+    "check:whiteboard": "node --test tests/whiteboard-plan.test.mjs tests/drawing-scene.test.mjs tests/drawing-planner.test.mjs tests/drawing-timeline.test.mjs tests/drawing-followup.test.mjs tests/house-details.test.mjs tests/drawing-assets.test.mjs tests/open-drawing.test.mjs tests/drawing-conversation.test.mjs tests/drawing-state.test.mjs",
+    "check": "npm run check:skill && npm run check:architecture && npm run check:archive && npm run check:voice && npm run check:growth && npm run check:safety && npm run check:server && npm run check:whiteboard && node server/smoke-test.mjs"
+  },
+  "dependencies": {
+    "eventsource-parser": "^3.1.1",
+    "konva": "^10.3.3",
+    "lucide": "^0.468.0",
+    "motion": "^13.1.1",
+    "roughjs": "^4.6.6",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

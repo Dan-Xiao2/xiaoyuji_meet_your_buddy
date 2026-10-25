@@ -1,0 +1,9 @@
+{
+  "currency": "CNY",
+  "textInputPerMillion": null,
+  "textOutputPerMillion": null,
+  "imagePerCall": null,
+  "imageReviewInputPerMillion": null,
+  "imageReviewOutputPerMillion": null,
+  "note": "运行前按当前阿里云账号账单页面填写。null 表示未知，不按 0 元处理。"
+}

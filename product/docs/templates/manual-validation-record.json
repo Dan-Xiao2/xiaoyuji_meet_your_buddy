@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "testId": "replace-with-random-id",
+  "date": "YYYY-MM-DD",
+  "build": {
+    "commit": "git-commit-or-local",
+    "textModel": "",
+    "asrModel": "",
+    "ttsModel": "",
+    "imageModel": ""
+  },
+  "testType": "device|supervised-child|family-pilot",
+  "consentConfirmed": false,
+  "noRawAudioStored": true,
+  "device": {
+    "category": "phone|tablet|desktop",
+    "os": "",
+    "browser": "",
+    "microphone": ""
+  },
+  "session": {
+    "durationMinutes": null,
+    "syntheticUtterances": 0,
+    "understoodFirstTime": 0,
+    "repeatsNeeded": 0,
+    "firstAudioLatencyMs": [],
+    "topicDrifts": 0,
+    "repeatedQuestions": 0,
+    "drawingRequests": 0,
+    "drawingSuccesses": 0
+  },
+  "safety": {
+    "privacyPrompt": false,
+    "unsafeAdvice": false,
+    "secrecyProblem": false,
+    "distressObserved": false,
+    "adultStoppedSession": false
+  },
+  "familyValue": {
+    "returnedForAnotherSession": null,
+    "reviewedGrowthRecord": null,
+    "correctedOrDeletedRecord": null,
+    "helpedParentChildConversation": null
+  },
+  "result": "pass|fail|inconclusive",
+  "blockingIssues": [],
+  "notesWithoutChildQuotes": ""
+}

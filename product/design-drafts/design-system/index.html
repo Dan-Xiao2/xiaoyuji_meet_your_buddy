@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>小宇记 · 组件样板</title>
+  <link rel="stylesheet" href="./sample.css">
+  <script src="../../node_modules/lucide/dist/umd/lucide.min.js" defer></script>
+  <script src="./sample.js" type="module"></script>
+</head>
+<body>
+  <aside class="review-bar" aria-label="样板预览控制">
+    <div><strong>设计样板</strong><span>模拟互动与数据 · 不录音</span></div>
+    <label>预览状态 <select id="preview-state"></select></label>
+  </aside>
+  <header class="app-header">
+    <button class="icon-button menu-trigger" id="menu-open" aria-label="打开菜单" aria-haspopup="dialog" aria-expanded="false" title="打开菜单"><i data-lucide="menu"></i></button>
+    <a class="brand" href="#talk" aria-label="小宇记，一起聊"><img src="../../assets/xiaoyu-planet.png" alt="" width="36" height="36"><span>小宇记</span></a>
+    <nav id="desktop-nav" aria-label="主导航"></nav>
+  </header>
+  <main id="content"></main>
+  <dialog id="drawer" aria-label="小宇记菜单">
+    <div class="drawer-heading"><strong>小宇记</strong><button class="icon-button" id="menu-close" aria-label="关闭菜单" title="关闭菜单"><i data-lucide="x"></i></button></div>
+    <nav id="drawer-nav" aria-label="更多页面"></nav>
+    <span class="drawer-note">记录孩子的小小宇宙</span>
+  </dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

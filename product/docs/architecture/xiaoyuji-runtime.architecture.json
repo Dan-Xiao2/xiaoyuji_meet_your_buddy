@@ -1,0 +1,272 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "小宇记当前运行架构",
+    "locale": "zh-CN",
+    "output": "xiaoyuji-runtime.architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "voice-loop",
+        "label": "语音陪伴主链路",
+        "focus": ["family", "conversation_ui", "voice_pipeline", "local_server", "qwen_speech", "tutor_orchestrator", "qwen_text"],
+        "note": "分享和纠正跟随本轮文字；明确换题取消旧绘图，告别本地结束并停止收音。异步回复按回合/消息校验，后台不改已说内容。云端语音失败暂停续听。HTTP仍传状态对象，尚无照片输入。"
+      },
+      {
+        "id": "visual-response",
+        "label": "视觉回应",
+        "focus": ["tutor_orchestrator", "conversation_ui", "whiteboard", "local_server", "qwen_text"],
+        "note": "精确对象本地执行；开放图片生成后必须通过视觉模型的低幼安全、要求匹配和编辑保持检查。自动检查不是完整发布验收。"
+      },
+      {
+        "id": "growth-record",
+        "label": "成长记录",
+        "focus": ["tutor_orchestrator", "student_memory", "growth_experience", "family"],
+        "note": "补全匹配revision/sessionId；启动先检查档案，损坏时仅提供本机下载与确认恢复。恢复/清空轮换代次，旧页面及旧快照不可写回。仍为同步主存储与整包备用快照，跨标签页原子事务及旧派生数据全面清洗未完成。"
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [52, 72],
+    "cols": 5,
+    "gapX": 58,
+    "gapY": 52,
+    "cellW": 164,
+    "cellH": 82
+  },
+  "components": [
+    {
+      "id": "family",
+      "type": "external",
+      "label": "孩子与家人",
+      "sublabel": "共享手机 / 旧平板",
+      "row": 1,
+      "col": 0
+    },
+    {
+      "id": "conversation_ui",
+      "type": "frontend",
+      "label": "一起聊",
+      "sublabel": "本地风险分流 · 发布前检查",
+      "row": 1,
+      "col": 1
+    },
+    {
+      "id": "voice_pipeline",
+      "type": "frontend",
+      "label": "连续语音控制",
+      "sublabel": "实时采集 · 流式播报",
+      "row": 0,
+      "col": 2
+    },
+    {
+      "id": "local_server",
+      "type": "backend",
+      "label": "本地 API 服务",
+      "sublabel": "白名单 · 请求校验",
+      "row": 0,
+      "col": 3
+    },
+    {
+      "id": "qwen_speech",
+      "type": "external",
+      "label": "Qwen 语音服务",
+      "sublabel": "实时转写 · 流式合成",
+      "row": 0,
+      "col": 4
+    },
+    {
+      "id": "tutor_orchestrator",
+      "type": "backend",
+      "label": "Tutor 编排器",
+      "sublabel": "共享安全规则 · 结构校验",
+      "row": 1,
+      "col": 3
+    },
+    {
+      "id": "qwen_text",
+      "type": "external",
+      "label": "Qwen 模型服务",
+      "sublabel": "文本 · 图片 · 视觉复核",
+      "row": 1,
+      "col": 4
+    },
+    {
+      "id": "knowledge_runtime",
+      "type": "database",
+      "label": "育儿知识系统",
+      "sublabel": "分龄知识卡 · 太阳事实种子",
+      "row": 2,
+      "col": 4
+    },
+    {
+      "id": "whiteboard",
+      "type": "frontend",
+      "label": "动态白板",
+      "sublabel": "对象与图片 · 基图校验",
+      "row": 2,
+      "col": 2
+    },
+    {
+      "id": "student_memory",
+      "type": "database",
+      "label": "Student Memory",
+      "sublabel": "代次保护 · 本机备用快照",
+      "row": 2,
+      "col": 3
+    },
+    {
+      "id": "growth_experience",
+      "type": "frontend",
+      "label": "成长记录与备份",
+      "sublabel": "回看 · 整理 · 恢复",
+      "row": 3,
+      "col": 3
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "家庭设备内",
+      "wraps": ["conversation_ui", "voice_pipeline", "whiteboard", "student_memory", "growth_experience"],
+      "pad": 22
+    },
+    {
+      "kind": "region",
+      "label": "当前本地开发服务",
+      "wraps": ["local_server", "tutor_orchestrator", "knowledge_runtime"],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "server_calls_image",
+      "from": "local_server",
+      "to": "qwen_text",
+      "label": "图片生成 / 编辑 / 视觉复核"
+    },
+    {
+      "id": "family_starts_conversation",
+      "from": "family",
+      "to": "conversation_ui",
+      "label": "开始与继续对话",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ui_controls_voice",
+      "from": "conversation_ui",
+      "to": "voice_pipeline",
+      "label": "录音与播报"
+    },
+    {
+      "id": "voice_calls_server",
+      "from": "voice_pipeline",
+      "to": "local_server",
+      "label": "PCM转写 · TTS与回退",
+      "labelAt": [667, 146]
+    },
+    {
+      "id": "server_calls_speech",
+      "from": "local_server",
+      "to": "qwen_speech",
+      "label": "音频识别与合成"
+    },
+    {
+      "id": "server_routes_turn",
+      "from": "local_server",
+      "to": "tutor_orchestrator",
+      "label": "Tutor / 绘图路由",
+      "labelAt": [778, 176]
+    },
+    {
+      "id": "orchestrator_calls_text",
+      "from": "tutor_orchestrator",
+      "to": "qwen_text",
+      "label": "对话或绘画计划",
+      "labelAt": [840, 280]
+    },
+    {
+      "id": "knowledge_guides_tutor",
+      "from": "knowledge_runtime",
+      "to": "tutor_orchestrator",
+      "label": "最多 3 张适龄知识卡"
+    },
+    {
+      "id": "orchestrator_returns_structure",
+      "from": "tutor_orchestrator",
+      "to": "conversation_ui",
+      "label": "回复 · 白板 · 成长证据",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ui_renders_board",
+      "from": "conversation_ui",
+      "to": "whiteboard",
+      "label": "精确播放 · 图片发布"
+    },
+    {
+      "id": "ui_saves_evidence",
+      "from": "conversation_ui",
+      "to": "student_memory",
+      "label": "非敏感原话与证据"
+    },
+    {
+      "id": "memory_builds_growth",
+      "from": "student_memory",
+      "to": "growth_experience",
+      "label": "按时间聚合与导出",
+      "labelAt": [778, 470]
+    },
+    {
+      "id": "parent_updates_archive",
+      "from": "growth_experience",
+      "to": "student_memory",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [[884, 504], [884, 370]],
+      "label": "整理与恢复",
+      "labelAt": [965, 448]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "orange",
+      "title": "当前主链路",
+      "items": [
+        "自动续听；明确告别本地结束并停止收音",
+        "短答先播；绘图校验会话和基图后发布",
+        "命中敏感规则后本地回应，跳过文本模型"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "成长记录原则",
+      "items": [
+        "敏感求助不归档；操作催促不作成长证据",
+        "补全核对片段修订；清空/恢复拒绝旧代次",
+        "损坏先恢复；备用失败可见；JSON手动备份"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "安全边界",
+      "items": [
+        "私有文件不公开；POST同源与有界JSON",
+        "有限中文规则；ASR音频先到云端再检测",
+        "无自动通知、敏感档案或历史全面脱敏"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "未完成与待验收",
+      "items": [
+        "Supabase 自动跨设备同步",
+        "图片有自动复核，编辑质量与独立安全集未通过",
+        "自动音色识别和多孩子档案",
+        "双工插话与生产部署"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,419 @@
+{
+  "schemaVersion": "1.0",
+  "reviewedAt": "2026-08-31",
+  "reviewStage": "第一轮逐本初审",
+  "method": [
+    "以本地文件的书名、作者、版本元数据和产品相关性建立逐本评审",
+    "把可复用的低风险原则与 source-registry.json 中的中国官方指南、机构资料和开放教材交叉核对",
+    "不把文件存在视为版权许可，不把书中观点视为医学、心理或发展诊断依据",
+    "页码级正文复核和版权核验仍需在后续精读中完成"
+  ],
+  "statusDefinitions": {
+    "runtime_via_cross_check": "书籍只作为内部线索；相关低风险原则已经由已登记权威来源支持，可以通过原创知识卡进入运行时",
+    "internal_only": "可帮助团队理解问题，但暂不直接驱动 Tutor 或孩子端内容",
+    "needs_professional_review": "涉及医学、睡眠、发育、身体教育或高度专业化判断，须由合资格专业人员和当前指南复核",
+    "version_merge": "同一主题存在多版或重复文件，先保留一份作为复核对象，避免重复和版本冲突"
+  },
+  "books": [
+    {
+      "bookId": "LOCAL-BOOK-004",
+      "title": "《父母的语言：3000万词汇塑造更强大的学习型大脑》",
+      "author": "达娜·萨斯金德、贝丝·萨斯金德、莱斯利·勒万特-萨斯金德",
+      "relativePath": "《父母的语言：3000万词汇塑造更强大的学习型大脑》达娜·萨斯金德（Dana Suskind） & 贝丝·萨斯金德（Beth Suskind） & 莱斯利·勒万特-萨斯金德（Leslie Lewinter-Suskind.pdf",
+      "pages": 312,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "把亲子交流看成轮流回应、共同注意和扩展表达，而不是向孩子灌输词汇量",
+        "提醒家长先接住孩子正在关注的事，再增加一个可理解的信息"
+      ],
+      "doNotAbsorb": [
+        "不把书名中的词汇数字当成每个家庭的目标或发展标准",
+        "不把家庭语言环境简化为决定孩子未来能力的单一原因"
+      ],
+      "cardIds": ["responsive-back-and-forth", "shared-reading-follow-child"],
+      "crossCheckSourceIds": ["CN-NHC-CARE-0-3-2022", "CN-UNICEF-POSITIVE-PARENTING", "NASEM-PARENTING-MATTERS-2016"],
+      "notes": "适合成为语言互动设计的内部线索。原书版本、许可和研究表述仍需人工核对。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-010",
+      "title": "1000天阅读效应",
+      "author": "陈苗苗、李岩",
+      "relativePath": "1000天阅读效应.pdf",
+      "pages": 293,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "把早期阅读设计为共同看、共同说、等待孩子回应的亲子活动",
+        "允许孩子从图像、声音、动作或重复中参与，不把识字量当成唯一结果"
+      ],
+      "doNotAbsorb": [
+        "不把固定阅读天数、书单或阅读量当作达标线",
+        "不复制书中的选书清单、版式或具体练习"
+      ],
+      "cardIds": ["shared-reading-follow-child"],
+      "crossCheckSourceIds": ["CN-NHC-CARE-0-3-2022", "CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018"],
+      "notes": "适合作为故事功能的低屏幕延伸：AI 讲一小段，孩子回到身边的书或现实物品。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-015",
+      "title": "捕捉儿童敏感期",
+      "author": "孙瑞雪",
+      "relativePath": "捕捉儿童敏感期.pdf",
+      "pages": 327,
+      "decision": "internal_only",
+      "confidence": "low",
+      "absorb": [
+        "把孩子反复关注某类事物当作值得观察的线索",
+        "鼓励成人记录具体行为和当时环境，而不是急着解释"
+      ],
+      "doNotAbsorb": [
+        "不把敏感期名称、时间窗口或单次行为当作科学量表",
+        "不因孩子没有表现出某种兴趣就推断落后、错过或需要纠正"
+      ],
+      "cardIds": ["observe-interest-without-label"],
+      "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-CHILD-GROWTH-2018"],
+      "notes": "保留观察视角，不把作者的阶段化叙事直接写进运行时。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-018",
+      "title": "从出生到三岁：婴幼儿能力发展与早期教育权威指南",
+      "author": "文件元数据未提供作者",
+      "relativePath": "从出生到三岁：婴幼儿能力发展与早期教育权威指南.pdf",
+      "pages": 398,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "按 0-3 岁的照护、动作、语言和互动需要设计家长辅助模式",
+        "把发展理解为多方面、连续且受环境影响的过程"
+      ],
+      "doNotAbsorb": [
+        "不直接复制书中的里程碑表、测试题或早教训练方案",
+        "不把年龄段描述变成对单个孩子的诊断"
+      ],
+      "cardIds": ["respond-to-signals", "talk-during-care", "safe-sensory-exploration"],
+      "crossCheckSourceIds": ["CN-NHC-CARE-0-3-2022", "CN-NHC-ECD-SERVICE-0-3-2024", "OER-COC-CHILD-GROWTH-2018"],
+      "notes": "可支持 0-3 岁家长辅助活动，但运行时以中国国家卫健委指南为先。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-023",
+      "title": "儿童发展心理学：了解孩子，才能教育好孩子",
+      "author": "琼·利特菲尔德·库克、格雷格·库克",
+      "relativePath": "儿童发展心理学 了解孩子，才能教育好孩子.pdf",
+      "pages": 699,
+      "decision": "internal_only",
+      "confidence": "medium",
+      "absorb": [
+        "用发展、关系、环境和个体差异共同理解孩子",
+        "把观察记录和上下文放在单一行为解释之前"
+      ],
+      "doNotAbsorb": [
+        "不把理论阶段或实验结果直接套到一个孩子身上",
+        "不从一次问话、画作或情绪推出稳定人格"
+      ],
+      "cardIds": ["observe-interest-without-label", "draw-and-talk"],
+      "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-CHILD-GROWTH-2018", "NASEM-PARENTING-MATTERS-2016"],
+      "notes": "作为背景理论阅读，不直接作为生成式判断的唯一来源。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-051",
+      "title": "孩子绘画的秘密：幼儿绘画百问必答",
+      "author": "王秀丽",
+      "relativePath": "价值千元的育儿书籍/[孩子绘画的秘密：幼儿绘画百问必答].王秀丽.pdf",
+      "pages": 112,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "把孩子的画当作引发谈话和保留成长片段的入口",
+        "让孩子自己讲画面、命名人物和决定是否保存"
+      ],
+      "doNotAbsorb": [
+        "不根据颜色、人物位置或画面元素做心理诊断",
+        "不要求孩子画得像、不用成人审美评价作品"
+      ],
+      "cardIds": ["draw-and-talk"],
+      "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING"],
+      "notes": "适合小宇记的成长留存功能，但每条记录必须标明是孩子的解释还是成人的观察。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-060",
+      "title": "如何培养孩子的社会能力",
+      "author": "默娜·B·舒尔、特里萨·弗伊·迪吉若尼莫",
+      "relativePath": "价值千元的育儿书籍/[如何培养孩子的社会能力].(美)默娜.B.舒尔.(美)特里萨.弗伊.迪吉若尼莫.扫描版.pdf",
+      "pages": 228,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "用角色、情境和多个可能办法帮助孩子练习表达感受与解决冲突",
+        "引导孩子说出自己的想法，也考虑别人可能的想法"
+      ],
+      "doNotAbsorb": [
+        "不把社会能力变成服从、外向或讨人喜欢的评分",
+        "不复制完整课程脚本或假设所有家庭文化都相同"
+      ],
+      "cardIds": ["cooperative-problem-solving", "friend-perspective"],
+      "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING", "OER-COC-ECE-CURRICULUM-2018"],
+      "notes": "可转成短情境对话和现实中的同伴协商活动，先让孩子提出办法。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-096",
+      "title": "你的1岁2岁3岁孩子",
+      "author": "路易丝·埃姆斯、弗兰西斯·伊尔克、卡罗尔·哈柏",
+      "relativePath": "你的1岁2岁3岁孩子.pdf",
+      "pages": 599,
+      "decision": "internal_only",
+      "confidence": "medium",
+      "absorb": [
+        "提醒家长同一年龄段也会有很大差异，先看具体情境",
+        "为 1-3 岁的自主、情绪和语言互动设计更短、更依赖成人的支持"
+      ],
+      "doNotAbsorb": [
+        "不把年龄画像写成‘这个年龄的孩子都这样’",
+        "不使用书中的标签替代当前观察，也不把年代较早的描述当作最新证据"
+      ],
+      "cardIds": ["expand-and-wait", "two-safe-choices"],
+      "crossCheckSourceIds": ["CN-NHC-CARE-0-3-2022", "CN-NHC-ECD-SERVICE-0-3-2024"],
+      "notes": "适合帮助产品写年龄语气，不适合作为单独的发育判断依据。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-103",
+      "title": "陪孩子走过幼儿园三年：构筑最坚实的安全感",
+      "author": "文件元数据未提供作者",
+      "relativePath": "陪孩子走过幼儿园三年  构筑最坚实的安全感_14681053.pdf",
+      "pages": 224,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "把入园、离园和家庭变化看成需要共同调节的过渡情境",
+        "给家长一个具体、稳定、可重复的告别或回家交流方式"
+      ],
+      "doNotAbsorb": [
+        "不保证某种仪式能消除所有分离情绪",
+        "不根据孩子是否愿意讲幼儿园推断其在园状态或心理问题"
+      ],
+      "cardIds": ["kindergarten-transition-ritual", "tell-me-one-moment"],
+      "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING", "NASEM-PARENTING-MATTERS-2016"],
+      "notes": "直接贴合中国幼儿园家庭场景，但书本经验不能替代园方或专业支持。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-107",
+      "title": "全脑教养法",
+      "author": "丹尼尔·西格尔、蒂娜·佩恩·布赖森",
+      "relativePath": "全脑教养法.pdf",
+      "pages": 193,
+      "decision": "internal_only",
+      "confidence": "medium",
+      "absorb": [
+        "先帮助孩子恢复连接和表达，再讨论问题或下一步",
+        "用简短语言命名感受，给孩子时间把经历说完"
+      ],
+      "doNotAbsorb": [
+        "不把通俗的脑科学隐喻当作严格的神经科学解释",
+        "不声称某种回应必然改变大脑或治疗情绪问题"
+      ],
+      "cardIds": ["repair-after-disconnection", "name-and-accept-emotion"],
+      "crossCheckSourceIds": ["CN-UNICEF-POSITIVE-PARENTING", "NASEM-PARENTING-MATTERS-2016"],
+      "notes": "可影响小宇的回应顺序，但要去掉神经科学确定性语言。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-110",
+      "title": "善解童贞（全5册）",
+      "author": "胡萍",
+      "relativePath": "善解童贞（全5册）.pdf",
+      "pages": 1143,
+      "decision": "needs_professional_review",
+      "confidence": "medium",
+      "absorb": [
+        "可研究如何用年龄适宜、尊重身体边界的语言回答儿童问题",
+        "把求助、拒绝和告诉可信任成人作为安全教育的一部分"
+      ],
+      "doNotAbsorb": [
+        "未经儿童安全和性教育专业复核，不进入 Tutor 自动回答",
+        "不使用恐吓、羞耻、成人化细节或把正常好奇病理化"
+      ],
+      "cardIds": [],
+      "crossCheckSourceIds": ["CN-UNICEF-HEALTH-0-6-2018", "CN-UNICEF-POSITIVE-PARENTING"],
+      "notes": "高价值但高风险主题，先做专家审阅和年龄分层，不在本轮生成知识卡。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-124",
+      "title": "养育有安全感的孩子",
+      "author": "肯特·霍夫曼",
+      "relativePath": "养育有安全感的孩子.pdf",
+      "pages": 260,
+      "decision": "internal_only",
+      "confidence": "medium",
+      "absorb": [
+        "把稳定回应、可预测边界和关系修复作为家长支持语言的方向",
+        "允许家长承认自己刚才没有回应好，并重新连接"
+      ],
+      "doNotAbsorb": [
+        "不凭几段对话判断依恋类型或家庭关系质量",
+        "不把安全感写成家长必须完美、孩子必须始终平静"
+      ],
+      "cardIds": ["repair-after-disconnection", "kindergarten-transition-ritual"],
+      "crossCheckSourceIds": ["CN-UNICEF-POSITIVE-PARENTING", "NASEM-PARENTING-MATTERS-2016"],
+      "notes": "可支持家长端的温和措辞和修复建议，不能用于依恋诊断。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-127",
+      "title": "婴幼儿睡眠全书",
+      "author": "小土大橙子",
+      "relativePath": "婴幼儿睡眠全书.pdf",
+      "pages": 496,
+      "decision": "needs_professional_review",
+      "confidence": "low",
+      "absorb": [
+        "内部研究家庭如何记录睡前环境、作息变化和照护者观察",
+        "如未来设计睡前故事，只强调陪伴和固定仪式，不做疾病判断"
+      ],
+      "doNotAbsorb": [
+        "不自动给出睡眠训练、喂养、疾病或药物建议",
+        "不把某个睡眠时长或入睡方式当作所有孩子的标准"
+      ],
+      "cardIds": [],
+      "crossCheckSourceIds": ["CN-NHC-CARE-0-3-2022", "CN-UNICEF-HEALTH-0-6-2018"],
+      "notes": "本轮不进入运行时；健康和睡眠内容需当前指南、儿科专业人员及版本审查。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-129",
+      "title": "游戏力",
+      "author": "科恩",
+      "relativePath": "游戏力-.pdf",
+      "pages": 218,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "用共同游戏和想象表达建立连接，而不是把游戏变成操控孩子的工具",
+        "跟随孩子的兴趣，再用一个小变化邀请继续探索"
+      ],
+      "doNotAbsorb": [
+        "不保证游戏可以解决所有情绪、行为或关系困难",
+        "不强迫孩子玩、不用奖励把每个游戏绑定成学习任务"
+      ],
+      "cardIds": ["child-led-play", "pretend-play"],
+      "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING", "OER-COC-ECE-CURRICULUM-2018"],
+      "notes": "很适合小宇记的低屏幕产品哲学，落地时必须回到现实游戏。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-213",
+      "title": "崔玉涛图解家庭育儿8：小儿生长发育",
+      "author": "崔玉涛",
+      "relativePath": "育儿书/育儿类/崔玉涛图解家庭育儿8小儿生长发育.pdf",
+      "pages": 72,
+      "decision": "needs_professional_review",
+      "confidence": "low",
+      "absorb": [
+        "内部研究家长常见的生长发育问题和需要转向专业服务的场景",
+        "帮助设计‘记录事实、咨询专业人士’的家长流程"
+      ],
+      "doNotAbsorb": [
+        "不把书中的生长数据、图表或发育判断直接写入运行时",
+        "不依据小宇的对话记录做发育筛查、诊断或预测"
+      ],
+      "cardIds": [],
+      "crossCheckSourceIds": ["CN-NHC-CARE-0-3-2022", "CN-NHC-ECD-SERVICE-0-3-2024", "CN-UNICEF-HEALTH-0-6-2018"],
+      "notes": "版本较早且属于健康资料，只留作问题地图；正式内容必须由专业人员复核。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-216",
+      "title": "丁香妈妈科学养育：百位医生给新手妈妈的育儿解决方案",
+      "author": "丁香妈妈",
+      "relativePath": "育儿书/育儿类/丁香妈妈科学养育：百位医生给新手妈妈的育儿解决方案.pdf",
+      "pages": 362,
+      "decision": "needs_professional_review",
+      "confidence": "low",
+      "absorb": [
+        "内部研究家长会如何描述常见照护问题，以及什么信息需要先收集",
+        "可参考‘先说明不确定性，再建议咨询专业人士’的沟通结构"
+      ],
+      "doNotAbsorb": [
+        "不复制医生问答、药物剂量、疾病流程或检查建议",
+        "不因为内容署名医生就跳过来源时效和中国现行指南复核"
+      ],
+      "cardIds": [],
+      "crossCheckSourceIds": ["CN-NHC-CARE-0-3-2022", "CN-UNICEF-HEALTH-0-6-2018"],
+      "notes": "健康内容不进入当前 Tutor；未来如做家长健康导航，需独立的医疗安全项目。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-228",
+      "title": "美国儿科学会育儿百科 0-5岁",
+      "author": "斯蒂文·谢尔夫等",
+      "relativePath": "育儿书/育儿类/美国儿科学会育儿百科  0-5岁_11738838_.pdf",
+      "pages": 430,
+      "decision": "version_merge",
+      "confidence": "low",
+      "absorb": [
+        "只把它作为儿科主题索引和旧版内容对照对象",
+        "保留‘何时需要成人/医生介入’的产品边界问题"
+      ],
+      "doNotAbsorb": [
+        "不与第6版并列进入知识库",
+        "不使用旧版医疗建议，也不复制百科条目"
+      ],
+      "cardIds": [],
+      "crossCheckSourceIds": ["CN-UNICEF-HEALTH-0-6-2018", "CN-NHC-CARE-0-3-2022"],
+      "notes": "与 LOCAL-BOOK-230 合并评审，默认以更可靠、当前且适用于中国的官方来源为准。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-230",
+      "title": "美国儿科学会育儿百科第6版",
+      "author": "斯蒂文·谢尔弗",
+      "relativePath": "育儿书/育儿类/美国儿科学会育儿百科第6版.pdf",
+      "pages": 1194,
+      "decision": "needs_professional_review",
+      "confidence": "low",
+      "absorb": [
+        "作为家长问题分类和安全边界的内部参考，不直接生成诊疗建议",
+        "如未来需要健康导航，先提炼问题类型，再接入当前中国专业来源"
+      ],
+      "doNotAbsorb": [
+        "不把美国儿科建议直接移植到中国家庭、医疗体系或法规环境",
+        "不复制整章内容、表格、疾病说明或剂量信息"
+      ],
+      "cardIds": [],
+      "crossCheckSourceIds": ["CN-UNICEF-HEALTH-0-6-2018", "CN-NHC-CARE-0-3-2022"],
+      "notes": "第6版优先于旧版做内部复核，但仍不能替代中国官方指南和专业咨询。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-309",
+      "title": "真正的蒙氏教育在家庭：50个经典探索游戏造就孩子认知力",
+      "author": "文件元数据未提供作者",
+      "relativePath": "真正的蒙氏教育在家庭  50个经典探索游戏造就孩子认知力_14252634.pdf",
+      "pages": 178,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "用真实材料、动手操作、分类比较和孩子选择支持探索",
+        "把 AI 的解释收束为一个可在家中观察的行动"
+      ],
+      "doNotAbsorb": [
+        "不复制书中具体游戏步骤、图片或整套课程",
+        "不把蒙氏方法包装成唯一正确的教育方式"
+      ],
+      "cardIds": ["hands-on-choice-exploration", "compare-count-real-things"],
+      "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018", "PD-MONTESSORI-HANDBOOK-1914"],
+      "notes": "吸收‘真实、具体、可选择’的活动方向；具体材料和安全边界由小宇记重新设计。"
+    },
+    {
+      "bookId": "LOCAL-BOOK-310",
+      "title": "真正的蒙氏教育在家庭：50个经典语言游戏造就孩子表达力",
+      "author": "文件元数据未提供作者",
+      "relativePath": "真正的蒙氏教育在家庭  50个经典语言游戏造就孩子表达力_14247078.pdf",
+      "pages": 177,
+      "decision": "runtime_via_cross_check",
+      "confidence": "medium",
+      "absorb": [
+        "用命名、描述、轮流说和现实物品支持孩子表达",
+        "让孩子决定讲什么、怎么讲，成人只增加一个可以继续的线索"
+      ],
+      "doNotAbsorb": [
+        "不把语言游戏变成识字、发音或表达速度测试",
+        "不复制整套练习、插图或原书措辞"
+      ],
+      "cardIds": ["responsive-back-and-forth", "story-to-real-world"],
+      "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING", "OER-COC-ECE-CURRICULUM-2018"],
+      "notes": "适合转化为‘说完就去做/找/画’的低屏幕语言活动。"
+    }
+  ]
+}

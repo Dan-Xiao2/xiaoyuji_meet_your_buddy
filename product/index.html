@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#deeff3" />
+    <title>小宇记 | AI 儿童成长陪伴</title>
+    <link rel="icon" type="image/png" href="./assets/xiaoyu-planet.png" />
+    <link rel="apple-touch-icon" href="./assets/xiaoyu-planet.png" />
+    <link rel="stylesheet" href="./src/styles/base.css" />
+    <link rel="stylesheet" href="./src/styles/components.css" />
+    <link rel="stylesheet" href="./src/styles/responsive.css" />
+    <link rel="stylesheet" href="./src/styles/whiteboard-scene.css" />
+    <link rel="stylesheet" href="./src/styles/design-system.css" />
+  </head>
+  <body>
+    <div class="app-shell" inert aria-busy="true">
+      <header class="topbar">
+        <button
+          class="mobile-menu-button"
+          id="mobileMenuButton"
+          type="button"
+          aria-label="打开菜单"
+          aria-controls="mobileDrawer"
+          aria-expanded="false"
+        >
+          <i data-lucide="menu" aria-hidden="true"></i>
+        </button>
+        <a class="brand" href="./index.html" aria-label="小宇记首页">
+          <img src="./assets/xiaoyu-planet.png" alt="" />
+          <span>小宇记</span>
+        </a>
+        <nav class="topnav" id="desktopNavigation" aria-label="主要功能"></nav>
+        <span class="sr-only" id="connectionStatus" aria-live="polite">可以开始</span>
+        <span class="mobile-header-spacer" aria-hidden="true"></span>
+      </header>
+
+      <p id="storageWarning" role="alert" hidden>部分新记录可能尚未保存。请先结束聊天，并到备份记录下载已有档案。</p>
+      <p id="durableStorageWarning" role="status" hidden>本机备用保存暂不可用。请到备份记录下载已有档案，不要清理浏览器数据。</p>
+      <section id="archiveRecovery" class="archive-recovery" aria-labelledby="archiveRecoveryTitle" hidden>
+        <h1 id="archiveRecoveryTitle" tabindex="-1">先保护这台设备的记录</h1>
+        <p>本机资料暂时无法读取，已暂停聊天和保存。原始内容没有被覆盖。</p>
+        <button class="primary-button" type="button" data-recovery-download><i data-lucide="download" aria-hidden="true"></i>下载恢复文件</button>
+        <div class="archive-recovery-actions">
+          <button class="text-button" type="button" data-recovery-import><i data-lucide="upload" aria-hidden="true"></i>选择完整备份</button>
+          <button class="text-button" type="button" data-recovery-local hidden>查看本机备用副本</button>
+          <button class="text-button" type="button" data-recovery-retry><i data-lucide="refresh-cw" aria-hidden="true"></i>重新检查</button>
+        </div>
+        <input type="file" accept="application/json,.json" aria-label="选择完整备份" hidden />
+        <form data-recovery-confirm hidden>
+          <p data-recovery-preview></p>
+          <label><input type="checkbox" data-recovery-consent required />我确认用这份备份替换本机资料</label>
+          <button class="primary-button" type="submit">确认恢复</button>
+        </form>
+        <p role="status" aria-live="polite"></p>
+      </section>
+      <main class="workspace" data-active-view="learn">
+        <section class="learn-view view-panel" aria-label="家庭对话区">
+          <section class="session-gate" id="sessionGate" aria-live="polite"></section>
+
+          <section class="child-stage" id="childStage" data-layout="voice" aria-label="家庭语音白板" hidden>
+            <div class="child-session-bar">
+              <span id="childSessionName">家人</span>
+              <label class="speaker-picker" id="speakerPickerWrap" hidden>
+                <span>现在说话</span>
+                <select id="activeSpeaker" aria-label="现在说话的家庭成员"></select>
+              </label>
+              <button class="quiet-link" id="endChildSession" type="button">结束</button>
+            </div>
+
+            <article class="child-voice-dock" aria-label="语音对话">
+              <button class="voice-orb child-voice-orb" id="mainVoiceButton" type="button" aria-label="开始聊天">
+                <span class="xiaoyu-talk-visual">
+                  <span class="xiaoyu-listening-shadow" aria-hidden="true"></span>
+                  <img class="xiaoyu-talk-character" src="./assets/xiaoyu-planet.png" alt="" />
+                </span>
+                <strong class="xiaoyu-talk-label" id="voicePromptTitle">开始聊天</strong>
+              </button>
+              <span class="sr-only" id="voicePromptDetail" aria-live="polite">说完松开</span>
+              <div class="sr-only" aria-live="polite">
+                <span id="voiceStatus">等待说话</span>
+                <span id="voiceTranscript"></span>
+                <span id="voiceSupportText"></span>
+                <input id="speakReplies" type="checkbox" checked hidden />
+                <div class="voice-diagnostic" id="voiceDiagnostic"></div>
+              </div>
+            </article>
+
+            <div id="drawingStatus" class="drawing-status" role="status" hidden></div>
+            <div id="speechFailure" class="drawing-status" role="status" hidden>
+              <p>声音暂时没连上。</p>
+              <p id="speechFailureText"></p>
+              <button id="retrySpeech" class="text-button" type="button" title="重新播放这句话" aria-label="重新播放这句话"><i data-lucide="volume-2" aria-hidden="true"></i>再听一次</button>
+            </div>
+            <article class="child-whiteboard-panel" id="childWhiteboardPanel" aria-label="视觉白板" hidden>
+              <div class="whiteboard child-whiteboard" id="whiteboard"></div>
+            </article>
+
+            <details class="adult-fallback" hidden>
+              <summary>成人备用输入</summary>
+              <form class="ask-box" id="askForm">
+                <textarea
+                  id="childInput"
+                  name="childInput"
+                  rows="3"
+                  placeholder="如果现场语音不可用，可以在这里输入一句想说的话"
+                ></textarea>
+                <div class="ask-actions">
+                  <button type="submit" class="primary-button">发送</button>
+                  <button type="button" class="text-button" id="resetSession">重新开始</button>
+                </div>
+              </form>
+            </details>
+
+            <div class="hidden-message-log" id="messageList" aria-live="polite"></div>
+          </section>
+        </section>
+
+        <section class="parent-view view-panel" aria-label="家长视图">
+          <div class="parent-home">
+            <header class="parent-welcome">
+              <div>
+                <p class="eyebrow" id="parentGreeting" hidden></p>
+                <h1 id="parentHeadline">家庭设置</h1>
+              </div>
+            </header>
+
+            <article class="parent-session-panel" id="parentSessionPanel" aria-live="polite">
+              <div class="parent-session-copy">
+                <h2>先认识一下孩子</h2>
+              </div>
+              <div class="session-profile-fields">
+                <label>
+                  孩子昵称
+                  <input id="startChildName" placeholder="例如：安安" />
+                </label>
+                <label>
+                  年龄段
+                  <select id="startAgeBand">
+                    <option value="3-4">3-4 岁</option>
+                    <option value="4-5" selected>4-5 岁</option>
+                    <option value="5-6">5-6 岁</option>
+                    <option value="6-7">6-7 岁</option>
+                  </select>
+                </label>
+                <label class="session-consent">
+                  <input id="startConsent" type="checkbox" />
+                  <span>同意在这台设备保存成长记录</span>
+                </label>
+              </div>
+              <div class="parent-session-actions">
+                <button class="primary-button" id="startChildSession" type="button">开始聊天</button>
+                <button class="text-button" id="endParentSession" type="button" hidden>结束聊天</button>
+              </div>
+              <p class="session-form-status" id="sessionFormStatus"></p>
+            </article>
+
+            <details class="microphone-settings" id="microphoneSettings">
+              <summary>麦克风</summary>
+              <div class="microphone-settings-body">
+                <label>聊天麦克风<select aria-label="聊天麦克风"><option value="">跟随系统</option></select></label>
+                <button class="text-button" type="button" data-mic-refresh><i data-lucide="refresh-cw" aria-hidden="true"></i>允许并读取麦克风</button>
+                <p data-mic-actual></p>
+                <p data-mic-recent></p>
+                <meter min="0" max="1" value="0" aria-label="输入音量"></meter>
+                <div class="microphone-actions">
+                  <button class="primary-button" type="button" data-mic-record><i data-lucide="mic" aria-hidden="true"></i>录一小段</button>
+                  <button class="text-button" type="button" data-mic-stop hidden><i data-lucide="square" aria-hidden="true"></i>停止</button>
+                  <button class="text-button" type="button" data-mic-clear hidden><i data-lucide="trash-2" aria-hidden="true"></i>清除录音</button>
+                </div>
+                <audio controls hidden aria-label="本机录音试听"></audio>
+                <p class="microphone-privacy">测试录音仅用于本机试听，不上传、不加入成长记录。</p>
+                <p data-mic-status role="status"></p>
+              </div>
+            </details>
+
+            <details class="family-recap" id="familyRecap" hidden>
+              <summary>本次陪伴</summary>
+            <article class="parent-today-panel" id="parentTodayPanel" hidden>
+              <div id="adultSummary"></div>
+            </article>
+
+            <article class="offline-panel" id="offlinePanel" hidden>
+              <div class="parent-section-heading">
+                <div>
+                  <p class="eyebrow">一起玩一会儿</p>
+                  <h2>今天的亲子小任务</h2>
+                </div>
+              </div>
+              <div id="offlineTask"></div>
+            </article>
+
+            <section class="parent-recent" id="parentRecent" aria-labelledby="recentTitle" hidden>
+              <div class="parent-section-heading">
+                <div>
+                  <p class="eyebrow">最近的小变化</p>
+                  <h2 id="recentTitle">成长足迹</h2>
+                </div>
+                <button class="quiet-link" type="button" data-view-link="memory">查看全部</button>
+              </div>
+              <div id="parentTimeline"></div>
+            </section>
+
+            <details class="observation-drawer">
+              <summary>
+                <span>
+                  <strong>记一句观察</strong>
+                  <small>你看到的，比对错更重要</small>
+                </span>
+                <span class="drawer-mark" aria-hidden="true">+</span>
+              </summary>
+              <form class="observation-form" id="observationForm">
+                <fieldset class="choice-field">
+                  <legend>今天参与得怎么样？</legend>
+                  <div class="choice-pills">
+                    <label><input type="radio" name="completion" value="completed" checked /><span>完成了</span></label>
+                    <label><input type="radio" name="completion" value="partial" /><span>试了一会儿</span></label>
+                    <label><input type="radio" name="completion" value="not_interested" /><span>没太感兴趣</span></label>
+                  </div>
+                </fieldset>
+                <fieldset class="choice-field">
+                  <legend>你注意到了什么？</legend>
+                  <div class="choice-pills">
+                    <label><input type="radio" name="behavior" value="expressed" checked /><span>主动表达</span></label>
+                    <label><input type="radio" name="behavior" value="recounted" /><span>自己再试</span></label>
+                    <label><input type="radio" name="behavior" value="high_interest" /><span>特别投入</span></label>
+                    <label><input type="radio" name="behavior" value="distracted" /><span>容易分心</span></label>
+                  </div>
+                </fieldset>
+                <label class="support-select">
+                  大人需要帮多少？
+                  <select id="support" name="support">
+                    <option value="no_support">基本不用帮</option>
+                    <option value="some_support" selected>稍微提醒一下</option>
+                    <option value="much_support">需要一起完成</option>
+                  </select>
+                </label>
+                <label class="observation-note">
+                  还想记住什么？<span>（可不填）</span>
+                  <textarea id="observationNotes" name="observationNotes" rows="2" placeholder="例如：他自己换了一种方法。"></textarea>
+                </label>
+                <button class="primary-button observation-save" id="saveObservation" type="button">保存这句话</button>
+              </form>
+            </details>
+
+              <div class="data-actions">
+                <button class="text-button" id="copyParentNote" type="button">复制今日小结</button>
+                <button class="text-button" id="exportData">导出成长记录</button>
+              </div>
+            </details>
+
+            <section class="parent-more" aria-label="家庭资料">
+              <div class="parent-more-body">
+                <section class="family-member-settings" aria-labelledby="familyMembersTitle">
+                  <div class="family-member-heading">
+                    <div>
+                      <strong id="familyMembersTitle">家庭成员</strong>
+                      <span>1 个孩子 · 最多 6 位家长</span>
+                    </div>
+                    <span class="voice-id-status">说话人由你选择</span>
+                  </div>
+                  <div class="family-member-list" id="familyMemberList"></div>
+                  <form class="family-member-add" id="familyMemberForm">
+                    <input id="familyMemberName" maxlength="24" placeholder="称呼，例如：妈妈" aria-label="家庭成员称呼" />
+                    <select id="familyMemberRole" aria-label="家庭成员身份">
+                      <option value="mother">妈妈</option>
+                      <option value="father">爸爸</option>
+                      <option value="grandparent">祖辈</option>
+                      <option value="caregiver">照护者</option>
+                      <option value="other">其他家人</option>
+                    </select>
+                    <button class="text-button" type="submit">添加</button>
+                  </form>
+                  <p class="family-member-status" id="familyMemberStatus" aria-live="polite"></p>
+                </section>
+                <form class="profile-form" id="profileForm">
+                  <h2>孩子的资料</h2>
+                  <label>
+                    孩子昵称
+                    <input id="studentName" name="studentName" maxlength="24" placeholder="例如：安安" required aria-describedby="profileSaveStatus" />
+                  </label>
+                  <label>
+                    年龄段
+                    <select id="ageBand" name="ageBand">
+                      <option value="3-4">3-4 岁</option>
+                      <option value="4-5" selected>4-5 岁</option>
+                      <option value="5-6">5-6 岁</option>
+                      <option value="6-7">6-7 岁</option>
+                    </select>
+                  </label>
+                  <details class="profile-extras"><summary>更多陪伴偏好</summary>
+                  <label>
+                    最近喜欢
+                    <input id="interest" name="interest" placeholder="恐龙、汽车、画画、故事..." />
+                  </label>
+                  <label>
+                    最近想多陪伴
+                    <input id="goal" name="goal" placeholder="愿意表达 / 数量感 / 英语词汇" />
+                  </label>
+                  <label>
+                    家长码<span>（可选，4位数字）</span>
+                    <input id="parentPin" name="parentPin" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="保护家长页面" />
+                  </label>
+                  </details>
+                  <label class="checkbox-line">
+                    <input id="consent" name="consent" type="checkbox" role="switch" checked />
+                    保存孩子的成长记录
+                  </label>
+                  <label class="checkbox-line">
+                    <input id="showSessionSummary" name="showSessionSummary" type="checkbox" role="switch" checked />
+                    结束后显示本次小结
+                  </label>
+                  <div class="profile-save-actions">
+                    <button class="primary-button" id="saveProfile" type="submit">保存资料</button>
+                    <button class="quiet-link" id="clearParentPin" type="button" hidden>清除家长码</button>
+                  </div>
+                  <p class="profile-save-status" id="profileSaveStatus" aria-live="polite"></p>
+                </form>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="memory-view view-panel" aria-label="成长记录视图">
+          <article class="memory-panel">
+            <div id="memoryDashboard"></div>
+          </article>
+        </section>
+
+        <section class="backup-view view-panel" aria-label="备份记录视图">
+          <article class="backup-panel">
+            <header class="backup-page-heading">
+              <div><h1>备份记录</h1></div>
+              <button class="primary-button" id="backupExportData" type="button"><i data-lucide="download" aria-hidden="true"></i>完整备份</button>
+            </header>
+            <div id="backupDashboard"></div>
+            <p id="archiveControlStatus" role="status"></p>
+            <details class="memory-settings">
+              <summary>数据设置</summary>
+              <button class="text-button" id="backupImportButton" type="button">恢复完整备份</button>
+              <input type="file" id="backupImportFile" accept=".json,application/json" hidden />
+              <button class="danger-button" id="clearData" type="button">清空本地数据</button>
+            </details>
+          </article>
+        </section>
+      </main>
+
+      <dialog class="archive-dialog" id="momentEditor" aria-labelledby="momentEditorTitle">
+        <form id="momentEditorForm">
+          <div class="archive-dialog-heading"><h2 id="momentEditorTitle">整理这条记录</h2><button type="button" class="quiet-link" data-close-archive-dialog>取消</button></div>
+          <label>当时说的话<textarea name="childQuote" rows="3" maxlength="360" required></textarea></label>
+          <label>主题<input name="topics" placeholder="用顿号隔开" /></label>
+          <label>领域<select name="domain"></select></label>
+          <label>家长备注<textarea name="parentNote" rows="2" maxlength="500"></textarea></label>
+          <label class="archive-check"><input name="parentConfirmed" type="checkbox" />我确认这条记录</label>
+          <label class="archive-check"><input name="reviewEligible" type="checkbox" />计入成长回看</label>
+          <p class="archive-help">修改原话、主题或回看选择后，旧的自动推测会重新积累，其他原始记录仍然保留。</p>
+          <p id="momentEditorStatus" role="status"></p>
+          <div class="archive-dialog-actions"><button type="button" class="quiet-link" id="requestMomentDelete">删除这条</button><button class="primary-button" type="submit">保存</button></div>
+          <div id="momentDeleteConfirm" hidden>
+            <p>删除后无法在本机找回。之前下载的备份不会一起删除。</p>
+            <div class="archive-dialog-actions"><button class="text-button" type="button" id="cancelMomentDelete">保留</button><button class="danger-button" type="button" id="confirmMomentDelete">确认删除</button></div>
+          </div>
+        </form>
+      </dialog>
+      <dialog class="archive-dialog" id="restoreDialog" aria-labelledby="restoreTitle">
+        <form id="restoreConfirmForm">
+          <div class="archive-dialog-heading"><h2 id="restoreTitle">恢复备份</h2><button type="button" class="quiet-link" data-close-archive-dialog>取消</button></div>
+          <p id="restorePreview"></p><p id="restoreCurrent"></p>
+          <label class="archive-check"><input type="checkbox" id="restoreConsent" required />我同意用这份备份替换本机记录和设置</label>
+          <p id="restoreStatus" role="status"></p>
+          <button class="primary-button" type="submit">确认恢复</button>
+        </form>
+      </dialog>
+      <dialog class="archive-dialog" id="clearArchiveDialog" aria-labelledby="clearArchiveTitle" aria-describedby="clearArchiveDescription">
+        <form id="clearArchiveForm">
+          <div class="archive-dialog-heading"><h2 id="clearArchiveTitle">清空这台设备的资料？</h2></div>
+          <p id="clearArchiveDescription">孩子资料、成长记录和当前图画将被清空。请先下载完整备份；已经下载的文件不会一起删除。</p>
+          <p id="clearArchiveStatus" role="alert"></p>
+          <div class="archive-dialog-actions"><button type="button" class="text-button" data-close-archive-dialog autofocus>保留资料</button><button type="submit" class="danger-button">确认清空</button></div>
+        </form>
+      </dialog>
+      <div class="mobile-drawer" id="mobileDrawer" hidden>
+        <button class="mobile-drawer-backdrop" id="mobileDrawerBackdrop" type="button" aria-label="关闭菜单"></button>
+        <aside class="mobile-drawer-panel" id="mobileDrawerPanel" role="dialog" aria-modal="true" aria-labelledby="mobileDrawerTitle" tabindex="-1">
+          <header class="mobile-drawer-header">
+            <img src="./assets/xiaoyu-planet.png" alt="" />
+            <div>
+              <strong id="mobileDrawerTitle">小宇记</strong>
+              <span id="mobileDrawerProfile">孩子的成长陪伴</span>
+            </div>
+            <button class="mobile-drawer-close" id="mobileDrawerClose" type="button" aria-label="关闭菜单" title="关闭菜单"><i data-lucide="x" aria-hidden="true"></i></button>
+          </header>
+          <nav class="mobile-drawer-nav" id="mobileDrawerNavigation" aria-label="主要功能"></nav>
+          <p class="mobile-drawer-status" id="mobileDrawerStatus" aria-live="polite"></p>
+        </aside>
+      </div>
+
+      <div class="parent-lock" id="parentLock" hidden>
+        <form class="parent-lock-card" id="parentUnlockForm" role="dialog" aria-modal="true" aria-labelledby="parentLockTitle">
+          <img src="./assets/xiaoyu-planet.png" alt="" />
+          <h2 id="parentLockTitle">请大人输入家长码</h2>
+          <p>这里有成长记录和设置。</p>
+          <input id="parentUnlockPin" inputmode="numeric" maxlength="4" autocomplete="one-time-code" aria-label="四位家长码" />
+          <p class="parent-lock-status" id="parentLockStatus" aria-live="polite"></p>
+          <div class="parent-lock-actions">
+            <button class="primary-button" type="submit">进入</button>
+            <button class="text-button" id="cancelParentUnlock" type="button">回到聊天页面</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="./node_modules/motion/dist/motion.js"></script>
+    <script src="./node_modules/roughjs/bundled/rough.js"></script>
+    <script src="./node_modules/konva/konva.min.js"></script>
+    <script src="./node_modules/lucide/dist/umd/lucide.min.js"></script>
+    <script type="module" src="./src/bootstrap.js"></script>
+  </body>
+</html>

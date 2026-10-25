@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "name": "xiaoyu-parenting-judgment-system",
+  "purpose": "将多来源的婴幼儿教育资料转化为可追溯、能处理冲突、可被案例检验的统一判断系统。",
+  "layers": [
+    "sources_and_claims",
+    "principles",
+    "heuristics",
+    "tensions_and_resolution",
+    "anti_patterns_and_boundaries",
+    "judgment_cases",
+    "evaluation_and_revision"
+  ],
+  "runtimeStatus": "review_only",
+  "runtimeStatusNote": "当前只用于内部内容评审，未直接改变孩子端 Tutor 行为；通过案例和专业复核后再接入运行时。",
+  "requiredEvidenceFields": [
+    "sourceId",
+    "ageBands",
+    "evidenceType",
+    "licenseUse",
+    "confidence",
+    "reviewedAt"
+  ],
+  "sourcePriority": [
+    "chinese_official_guidance",
+    "professional_consensus_or_research",
+    "open_licensed_textbook",
+    "published_parenting_book",
+    "personal_opinion_or_secondary_summary"
+  ],
+  "inspiredBy": [
+    "https://github.com/alchaincyf/nuwa-skill",
+    "https://github.com/GBSOSS/skill-from-masters",
+    "https://github.com/acnlabs/anyone-skill",
+    "https://github.com/daveshap/ACE_Framework",
+    "https://github.com/danielmiessler/Fabric",
+    "https://github.com/getzep/graphiti",
+    "https://github.com/letta-ai/letta"
+  ]
+}

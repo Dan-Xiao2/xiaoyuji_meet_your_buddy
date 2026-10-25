@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小宇记成长足迹测试</title>
+    <link rel="stylesheet" href="../src/styles/base.css" />
+    <link rel="stylesheet" href="../src/styles/components.css" />
+    <link rel="stylesheet" href="../src/styles/responsive.css" />
+  </head>
+  <body>
+    <main class="workspace">
+      <article class="memory-panel">
+        <div id="memoryDashboard"></div>
+      </article>
+    </main>
+    <script type="module">
+      import { createInitialStudentModel } from "../src/student/studentSchema.js";
+      import { renderMemoryDashboard } from "../src/ui/memoryPanel.js";
+      import { createCrossWeekGrowthMoments } from "./fixtures/crossWeekGrowthMoments.js";
+
+      const moments = createCrossWeekGrowthMoments();
+      const studentModel = createInitialStudentModel({ name: "安安" });
+      renderMemoryDashboard(document.querySelector("#memoryDashboard"), {}, studentModel, null, moments);
+    </script>
+  </body>
+</html>

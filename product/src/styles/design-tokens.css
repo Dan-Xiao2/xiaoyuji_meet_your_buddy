@@ -1,0 +1,17 @@
+:root {
+  --xy-ink: #173f3b;
+  --xy-muted: #526a65;
+  --xy-line: #d8e2de;
+  --xy-page: #f6f8f7;
+  --xy-paper: #fff;
+  --xy-orange: #f39a55;
+  --xy-sky: #deeff3;
+  --xy-error: #a33332;
+  --xy-radius: 8px;
+  --xy-body: 16px;
+  --xy-caption: 14px;
+  --xy-heading: 28px;
+  --xy-section: 20px;
+  --xy-control: 48px;
+  --xy-content: 1104px;
+}

@@ -1,0 +1,384 @@
+:root {
+  --ink: #214f49;
+  --muted: #6e817a;
+  --paper: #fbf6e9;
+  --paper-deep: #f3ead6;
+  --sky: #d8e9eb;
+  --orange: #f3a064;
+  --orange-deep: #d87c45;
+  --yellow: #f2cb63;
+  --blue: #74a8c7;
+  --leaf: #7aa37b;
+  --line: #d8d5c7;
+  --shadow: 0 18px 42px rgba(33, 79, 73, 0.11);
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: #f1f3ef;
+  font-family: ui-rounded, "Arial Rounded MT Bold", "PingFang SC", "Microsoft YaHei", sans-serif;
+  letter-spacing: 0;
+}
+
+button {
+  color: inherit;
+  font: inherit;
+}
+
+.review-shell {
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  padding: 42px 24px 28px;
+}
+
+.review-heading {
+  margin-bottom: 28px;
+}
+
+.review-heading span,
+.state-heading > span {
+  color: var(--orange-deep);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.review-heading h1 {
+  margin: 8px 0 5px;
+  font-size: 34px;
+  line-height: 1.2;
+}
+
+.review-heading p,
+.state-heading p,
+.review-note span {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.state-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.state-column {
+  min-width: 0;
+}
+
+.state-heading {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 9px;
+  min-height: 68px;
+  margin-bottom: 12px;
+}
+
+.state-heading h2 {
+  margin: 0 0 3px;
+  font-size: 19px;
+}
+
+.state-heading p {
+  font-size: 13px;
+}
+
+.phone-frame {
+  width: 100%;
+  min-height: 720px;
+  overflow: hidden;
+  background: var(--paper);
+  border: 1px solid #d9ddd5;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.app-bar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 8px 16px;
+  background: rgba(251, 246, 233, 0.94);
+  border-bottom: 1px solid rgba(33, 79, 73, 0.1);
+}
+
+.speaker-button,
+.end-button {
+  min-height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.speaker-button span {
+  margin-left: 3px;
+  color: var(--orange-deep);
+}
+
+.end-button {
+  color: #456d65;
+}
+
+.companion-paper,
+.story-paper {
+  position: relative;
+  min-height: 668px;
+  overflow: hidden;
+  background-color: var(--paper);
+}
+
+.companion-paper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 28px 24px 58px;
+}
+
+.companion-paper::before,
+.story-paper::before {
+  display: none;
+}
+
+.xiaoyu-button {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 246px;
+  height: 246px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  transition: transform 150ms var(--ease);
+  touch-action: none;
+}
+
+.xiaoyu-button:active {
+  transform: scale(0.965);
+}
+
+.xiaoyu-visual {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 210px;
+  height: 210px;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.xiaoyu-visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  box-shadow: 0 18px 32px rgba(33, 79, 73, 0.13);
+}
+
+.main-instruction {
+  position: relative;
+  z-index: 2;
+  margin-top: 18px;
+  font-size: 18px;
+}
+
+.secondary-instruction {
+  position: relative;
+  z-index: 2;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.is-listening {
+  background-color: #faf2df;
+}
+
+.is-listening .xiaoyu-visual img {
+  box-shadow: 0 0 0 8px rgba(243, 160, 100, 0.12), 0 18px 32px rgba(33, 79, 73, 0.13);
+}
+
+.listening-orbit {
+  position: absolute;
+  z-index: 1;
+  inset: -3px;
+  width: 252px;
+  height: 252px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.orbit-moon {
+  position: absolute;
+  z-index: 3;
+  top: 41px;
+  right: 19px;
+  width: 11px;
+  height: 11px;
+  background: var(--yellow);
+  border: 2px solid rgba(33, 79, 73, 0.7);
+  border-radius: 50%;
+  box-shadow: 0 3px 6px rgba(33, 79, 73, 0.12);
+  transform-origin: -104px 82px;
+  will-change: transform;
+}
+
+.story-paper {
+  padding: 28px 24px 112px;
+  background-color: #fffdf7;
+  box-shadow: inset 0 0 48px rgba(111, 88, 52, 0.035);
+}
+
+.story-paper::before {
+  display: none;
+}
+
+.story-paper h3 {
+  position: relative;
+  z-index: 2;
+  margin: 8px 0 34px;
+  text-align: center;
+  font-size: 21px;
+}
+
+.rough-scene {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 350px;
+  overflow: visible;
+}
+
+.rough-scene .scene-label {
+  fill: var(--ink);
+  font-family: ui-rounded, "Arial Rounded MT Bold", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.rough-scene .scene-label-small {
+  font-size: 12px;
+}
+
+.board-sentence {
+  position: relative;
+  z-index: 2;
+  width: min(310px, 100%);
+  margin: 14px auto 0;
+  padding: 12px 15px;
+  color: #395f58;
+  background: #f9e9bd;
+  border: 2px solid #e0bd63;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: center;
+  transform: rotate(-1deg);
+}
+
+.corner-xiaoyu {
+  position: absolute;
+  z-index: 4;
+  bottom: 18px;
+  left: 18px;
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  touch-action: none;
+}
+
+.corner-xiaoyu img {
+  width: 78px;
+  height: 78px;
+  object-fit: cover;
+  border: 3px solid #fffdf7;
+  border-radius: 50%;
+  box-shadow: 0 10px 20px rgba(33, 79, 73, 0.18);
+}
+
+.review-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #d7ddd8;
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xiaoyu-button,
+  .xiaoyu-visual,
+  .orbit-moon {
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .state-grid {
+    grid-template-columns: 1fr;
+    width: min(420px, 100%);
+    margin: 0 auto;
+    gap: 32px;
+  }
+
+  .review-heading {
+    width: min(420px, 100%);
+    margin-right: auto;
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .review-shell {
+    padding: 24px 14px;
+  }
+
+  .review-heading h1 {
+    font-size: 28px;
+  }
+
+  .phone-frame {
+    min-height: 700px;
+  }
+
+  .companion-paper,
+  .story-paper {
+    min-height: 648px;
+  }
+
+  .review-note {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xiaoyu-button {
+    transition: none;
+  }
+}

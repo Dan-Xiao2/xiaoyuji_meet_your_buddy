@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小宇记语音界面草案</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="draft-page">
+      <header class="draft-heading">
+        <p>小宇记 · 语音页草案</p>
+        <h1>少一点解释，多一点陪伴感</h1>
+        <span>三个方向都保留：当前说话人、按住说话、白板、结束聊天。</span>
+      </header>
+
+      <section class="concept-grid" aria-label="三种语音页设计方向">
+        <article class="concept">
+          <header class="concept-title">
+            <span>A</span>
+            <div>
+              <h2>小宇就是按钮</h2>
+              <p>最少文字，角色和操作合为一体</p>
+            </div>
+          </header>
+          <div class="device concept-a">
+            <header class="app-bar">
+              <button class="speaker-switch" type="button">素素 <span aria-hidden="true">⌄</span></button>
+              <button class="end-action" type="button">结束</button>
+            </header>
+            <section class="voice-zone voice-zone-character">
+              <button class="character-button" type="button" aria-label="按住和小宇说话">
+                <img src="../../assets/xiaoyu-planet.png" alt="小宇" />
+                <span class="mic-badge" aria-hidden="true"><i class="mic-glyph"></i></span>
+              </button>
+              <strong>按住小宇说话</strong>
+            </section>
+            <section class="board-preview" aria-label="空白白板">
+              <span class="board-corner">小白板</span>
+            </section>
+          </div>
+        </article>
+
+        <article class="concept">
+          <header class="concept-title">
+            <span>B</span>
+            <div>
+              <h2>白板优先</h2>
+              <p>像一张会回应孩子的画纸</p>
+            </div>
+          </header>
+          <div class="device concept-b">
+            <header class="app-bar app-bar-on-board">
+              <button class="speaker-switch" type="button">素素 <span aria-hidden="true">⌄</span></button>
+              <button class="end-action" type="button">结束</button>
+            </header>
+            <section class="board-stage" aria-label="空白白板">
+              <img class="board-companion" src="../../assets/xiaoyu-planet.png" alt="小宇" />
+            </section>
+            <footer class="bottom-voice-dock">
+              <button class="round-mic-button" type="button" aria-label="按住说话">
+                <i class="mic-glyph" aria-hidden="true"></i>
+              </button>
+              <span>按住说话</span>
+            </footer>
+          </div>
+        </article>
+
+        <article class="concept">
+          <header class="concept-title">
+            <span>C</span>
+            <div>
+              <h2>桌面小伙伴</h2>
+              <p>更像一个安静、可触碰的小玩具</p>
+            </div>
+          </header>
+          <div class="device concept-c">
+            <header class="app-bar">
+              <button class="speaker-switch" type="button">素素 <span aria-hidden="true">⌄</span></button>
+              <button class="end-action" type="button">结束</button>
+            </header>
+            <section class="companion-stage">
+              <img src="../../assets/xiaoyu-planet.png" alt="小宇" />
+              <span class="companion-shadow" aria-hidden="true"></span>
+            </section>
+            <button class="physical-voice-button" type="button">
+              <i class="mic-glyph" aria-hidden="true"></i>
+              <span>按住说话</span>
+            </button>
+            <section class="board-preview board-preview-short" aria-label="空白白板">
+              <span class="board-corner">小白板</span>
+            </section>
+          </div>
+        </article>
+      </section>
+
+      <footer class="draft-note">
+        <strong>共同原则</strong>
+        <span>没有对话气泡 · 没有功能解释 · 不显示技术状态 · 白板只在需要时出现内容</span>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小宇记 · 小宇的画纸设计稿</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="review-shell">
+      <header class="review-heading">
+        <span>小宇记 · 一起聊</span>
+        <h1>小宇的画纸</h1>
+        <p>同一套界面的三个关键状态。没有独立麦克风，没有聊天气泡。</p>
+      </header>
+
+      <section class="state-grid" aria-label="语音界面三个状态">
+        <article class="state-column">
+          <div class="state-heading">
+            <span>01</span>
+            <div>
+              <h2>等待说话</h2>
+              <p>整页只有一个主要动作</p>
+            </div>
+          </div>
+
+          <section class="phone-frame" aria-label="等待说话状态">
+            <header class="app-bar">
+              <button class="speaker-button" type="button">素素 <span aria-hidden="true">⌄</span></button>
+              <button class="end-button" type="button">结束</button>
+            </header>
+            <div class="companion-paper is-ready">
+              <button class="xiaoyu-button" type="button" aria-label="按住和小宇说话">
+                <span class="xiaoyu-visual">
+                  <img src="../../assets/xiaoyu-planet.png" alt="" />
+                </span>
+              </button>
+              <strong class="main-instruction">按住和小宇说</strong>
+            </div>
+          </section>
+        </article>
+
+        <article class="state-column">
+          <div class="state-heading">
+            <span>02</span>
+            <div>
+              <h2>正在听</h2>
+              <p>用手绘反馈代替技术图标</p>
+            </div>
+          </div>
+
+          <section class="phone-frame" aria-label="正在听状态">
+            <header class="app-bar">
+              <button class="speaker-button" type="button">素素 <span aria-hidden="true">⌄</span></button>
+              <button class="end-button" type="button">结束</button>
+            </header>
+            <div class="companion-paper is-listening">
+              <button class="xiaoyu-button" type="button" aria-label="正在听，说完松开" aria-pressed="false">
+                <svg class="listening-orbit" viewBox="0 0 260 260" aria-hidden="true"></svg>
+                <span class="orbit-moon" aria-hidden="true"></span>
+                <span class="xiaoyu-visual">
+                  <img src="../../assets/xiaoyu-planet.png" alt="" />
+                </span>
+              </button>
+              <strong class="main-instruction">我在听</strong>
+              <span class="secondary-instruction" id="audio-hint">按住时，小宇会跟着声音轻轻呼吸</span>
+            </div>
+          </section>
+        </article>
+
+        <article class="state-column">
+          <div class="state-heading">
+            <span>03</span>
+            <div>
+              <h2>画纸展开</h2>
+              <p>继续按左下角的小宇追问</p>
+            </div>
+          </div>
+
+          <section class="phone-frame" aria-label="白板展开状态">
+            <header class="app-bar">
+              <button class="speaker-button" type="button">素素 <span aria-hidden="true">⌄</span></button>
+              <button class="end-button" type="button">结束</button>
+            </header>
+            <div class="story-paper">
+              <h3>天空为什么是蓝色？</h3>
+
+              <svg class="rough-scene" viewBox="0 0 340 350" role="img" aria-label="太阳光经过空气，蓝色光散到天空里的手绘图"></svg>
+
+              <p class="board-sentence">蓝色的小光，更容易散到天空里。</p>
+
+              <button class="corner-xiaoyu" type="button" aria-label="按住小宇继续说话">
+                <img src="../../assets/xiaoyu-planet.png" alt="" />
+              </button>
+            </div>
+          </section>
+        </article>
+      </section>
+
+      <footer class="review-note">
+        <strong>共同原则</strong>
+        <span>整只小宇都是按钮 · 轨道只代表正在听 · 画纸只在需要时出现 · Rough.js + Motion</span>
+      </footer>
+    </main>
+    <script src="/node_modules/motion/dist/motion.js"></script>
+    <script src="/node_modules/roughjs/bundled/rough.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>

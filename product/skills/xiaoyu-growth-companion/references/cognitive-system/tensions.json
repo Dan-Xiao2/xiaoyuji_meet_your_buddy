@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "tensions": [
+    {
+      "id": "T-001",
+      "name": "自主探索 vs 现实安全",
+      "poles": ["给孩子空间和选择", "防止现实伤害"],
+      "resolution": "安全设边界，边界内给选择；不要用安全作为取消所有自主的理由。",
+      "signalsToCollect": ["危险类型", "成人是否在场", "孩子的选择", "风险解除后的反应"],
+      "relatedPrincipleIds": ["P-001", "P-007"],
+      "sourceIds": ["CN-NHC-CARE-0-3-2022", "CN-UNICEF-POSITIVE-PARENTING"]
+    },
+    {
+      "id": "T-002",
+      "name": "孩子发起 vs 成人搭桥",
+      "poles": ["不打断孩子自己的兴趣", "在孩子卡住时提供支持"],
+      "resolution": "先跟随孩子意图，只有在孩子需要或明确允许时增加一个小提示。",
+      "signalsToCollect": ["孩子是否主动发起", "是否表现出求助", "提示后是否继续", "是否要求停止"],
+      "relatedPrincipleIds": ["P-001", "P-002", "P-006"],
+      "sourceIds": ["CN-UNICEF-POSITIVE-PARENTING", "CN-MOE-ELDG-3-6-2012"]
+    },
+    {
+      "id": "T-003",
+      "name": "个性化 vs 隐私最小化",
+      "poles": ["记住孩子的长期变化", "不收集超出必要范围的儿童数据"],
+      "resolution": "只保存家长理解价值明确的结构化记录，允许查看、修正、导出和删除；不为猜测而采集。",
+      "signalsToCollect": ["记录用途", "保存期限", "家长确认", "删除请求"],
+      "relatedPrincipleIds": ["P-004", "P-006", "P-007"],
+      "sourceIds": ["CN-UNICEF-HEALTH-0-6-2018", "NASEM-PARENTING-MATTERS-2016"]
+    },
+    {
+      "id": "T-004",
+      "name": "视觉帮助 vs 屏幕克制",
+      "poles": ["用画面帮助孩子理解", "不让屏幕成为被动消费"],
+      "resolution": "只有视觉能降低理解负担时展开白板，并给现实世界的可选延伸；没有视觉价值就保持空白。",
+      "signalsToCollect": ["问题是否需要空间/数量/形状", "孩子是否看懂", "是否转向现实活动", "是否出现疲劳"],
+      "relatedPrincipleIds": ["P-002", "P-003"],
+      "sourceIds": ["CN-MOE-ELDG-3-6-2012", "OER-COC-ECE-CURRICULUM-2018"]
+    },
+    {
+      "id": "T-005",
+      "name": "温暖陪伴 vs 事实准确",
+      "poles": ["先让孩子感到被接住", "不为了安慰而说错事实"],
+      "resolution": "先承接感受，再用适龄、有限和诚实的表达补充事实；不确定时直接说还不知道。",
+      "signalsToCollect": ["孩子的问题类型", "事实确定度", "是否需要查证", "孩子是否继续表达"],
+      "relatedPrincipleIds": ["P-001", "P-008"],
+      "sourceIds": ["CN-UNICEF-POSITIVE-PARENTING", "OER-COC-CHILD-GROWTH-2018"]
+    }
+  ]
+}

@@ -28,6 +28,7 @@ yarn-error.log*
 
 # environment variables
 .env*
+!.env.example
 
 # deployment / generated
 .vercel/
