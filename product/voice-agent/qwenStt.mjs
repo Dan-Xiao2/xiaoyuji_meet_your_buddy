@@ -13,17 +13,19 @@ const MAX_QUEUED_SAMPLES = 16000 * 10;
 //
 // onInputReady fires once per stream, after the first audio frame has actually been
 // appended to the provider. A handshake acknowledgement alone is not proof that audio
-// reaches the recogniser. onDiagnostics receives timing records with counts only:
-// never audio, transcript text, or identities.
+// reaches the recogniser. onAppend fires after every appended frame, so a caller can prove
+// that audio is still arriving at a later point (for example after a client reconnects).
+// onDiagnostics receives timing records with counts only: never audio, transcript text, or identities.
 export class QwenSTT extends stt.STT {
   label = 'xiaoyu.QwenSTT';
   constructor({ config = realtimeAsrConfig(), connect = (url, options) => new WebSocket(url, options),
-    onInputReady = () => {}, onDiagnostics = () => {} } = {}) {
+    onInputReady = () => {}, onAppend = () => {}, onDiagnostics = () => {} } = {}) {
     super({ streaming: true, interimResults: false });
     if (!config.enabled) throw new Error('Qwen ASR is not configured');
     this.config = config;
     this.connect = connect;
     this.onInputReady = onInputReady;
+    this.onAppend = onAppend;
     this.onDiagnostics = onDiagnostics;
   }
   async _recognize() { throw new Error('Use the continuous ASR stream'); }
@@ -37,7 +39,7 @@ class QwenSpeechStream extends stt.SpeechStream {
     this.provider = provider;
   }
   async run() {
-    const { config, connect, onInputReady, onDiagnostics } = this.provider;
+    const { config, connect, onInputReady, onAppend, onDiagnostics } = this.provider;
     const startedAt = performance.now();
     // Diagnostics must never be able to disturb the audio path.
     const diagnose = (stage, data = {}) => {
@@ -63,6 +65,7 @@ class QwenSpeechStream extends stt.SpeechStream {
       const bytes = Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength);
       send('input_audio_buffer.append', { audio: bytes.toString('base64') });
       sentSamples += frame.samplesPerChannel;
+      try { onAppend(); } catch { /* readiness reporting must not break audio */ }
       if (appended) return;
       appended = true;
       diagnose('asr-first-append', { sentSamples: frame.samplesPerChannel });

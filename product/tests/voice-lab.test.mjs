@@ -151,11 +151,12 @@ async function clientFixture(t) {
   let sequence = 0;
   const event = data => room.emit(RoomEvent.DataReceived, new TextEncoder().encode(JSON.stringify({ sessionId: 'session-test', seq: ++sequence, ...data })), { kind: ParticipantKind.AGENT }, 0, 'xiaoyu.voice-lab');
   await client.start({ ageBand: '4-5', consent: true });
-  return { client, states, controls, event, room, RoomEvent };
+  const latestHello = () => controls.filter(item => item.type === 'hello').at(-1).helloId;
+  return { client, states, controls, event, room, RoomEvent, latestHello };
 }
 
 test('client cannot display listening or send text before input-ready proof', async t => {
-  const { client, states, controls, event } = await clientFixture(t);
+  const { client, states, controls, event, latestHello } = await clientFixture(t);
   event({ type: 'state', state: 'listening' });
   assert.equal(states.at(-1), 'waiting-agent');
   event({ type: 'ready', state: 'listening' });
@@ -163,14 +164,16 @@ test('client cannot display listening or send text before input-ready proof', as
   await assert.rejects(client.sendText('早到的文字'), /not ready/);
   assert.equal(controls.some(item => item.type === 'text'), false);
   event({ type: 'ready', state: 'listening', inputReady: true });
+  assert.equal(states.at(-1), 'waiting-agent', 'a ready that answers no hello is not proof');
+  event({ type: 'ready', state: 'listening', inputReady: true, helloId: latestHello() });
   assert.equal(states.at(-1), 'listening');
   await client.sendText('准备好了');
   assert.equal(controls.at(-1).text, '准备好了');
 });
 
 test('cancelled or reconnecting client rejects stale readiness and state', async t => {
-  const { client, states, event, room, RoomEvent } = await clientFixture(t);
-  event({ type: 'ready', state: 'listening', inputReady: true });
+  const { client, states, event, room, RoomEvent, latestHello } = await clientFixture(t);
+  event({ type: 'ready', state: 'listening', inputReady: true, helloId: latestHello() });
   room.emit(RoomEvent.Reconnecting);
   event({ type: 'state', state: 'listening' });
   assert.equal(states.at(-1), 'reconnecting');
@@ -180,11 +183,67 @@ test('cancelled or reconnecting client rejects stale readiness and state', async
   assert.equal(states.at(-1), 'stopped');
 });
 
+test('a ready sent before a reconnect cannot restore listening after it', async t => {
+  const { client, states, controls, event, room, RoomEvent, latestHello } = await clientFixture(t);
+  const first = latestHello();
+  event({ type: 'ready', state: 'listening', inputReady: true, helloId: first });
+  assert.equal(states.at(-1), 'listening');
+  room.emit(RoomEvent.Reconnecting);
+  room.emit(RoomEvent.Reconnected);
+  await new Promise(resolve => setImmediate(resolve));
+  const second = latestHello();
+  assert.notEqual(second, first, 'reconnect sends a new hello');
+  // The agent's answer to the old hello, delivered late with a newer sequence number.
+  event({ type: 'ready', state: 'listening', inputReady: true, helloId: first });
+  event({ type: 'state', state: 'listening' });
+  assert.equal(states.at(-1), 'reconnecting');
+  await assert.rejects(client.sendText('重连中'), /not ready/);
+  assert.equal(controls.some(item => item.type === 'text'), false);
+  event({ type: 'ready', state: 'listening', inputReady: true, helloId: second });
+  assert.equal(states.at(-1), 'listening');
+});
+
+test('an old session timing out cannot mark a newer ready session as failed', async t => {
+  const { EventEmitter } = await import('node:events');
+  const { RoomEvent, ParticipantKind } = await import('livekit-client');
+  const { createLivekitVoiceClient } = await import('../src/services/livekitVoiceClient.js');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const rooms = [], states = [];
+  let releaseStop, session = 0;
+  const stopRequest = new Promise(resolve => { releaseStop = resolve; });
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (String(url).endsWith('/stop')) { await stopRequest; return { ok: true, json: async () => ({}) }; }
+    return { ok: true, json: async () => ({ sessionId: `session-${++session}`, token: 'test', url: 'ws://test.invalid' }) };
+  });
+  const client = createLivekitVoiceClient({ audioContainer: { querySelectorAll: () => [] }, onState: state => states.push(state), createRoom: () => {
+    const room = new EventEmitter(), controls = [];
+    room.startAudio = room.connect = room.disconnect = async () => {};
+    room.localParticipant = { setMicrophoneEnabled: async () => {}, publishData: async bytes => controls.push(JSON.parse(new TextDecoder().decode(bytes))) };
+    rooms.push({ room, controls });
+    return room;
+  } });
+  t.after(() => { releaseStop(); return client.stop(); });
+  await client.start({ ageBand: '4-5', consent: true });
+  assert.equal(states.at(-1), 'waiting-agent');
+  t.mock.timers.tick(20000);           // first session never proves input; its cleanup now awaits /stop
+  assert.equal(states.at(-1), 'stopped');
+  await client.start({ ageBand: '4-5', consent: true });
+  const { room, controls } = rooms[1];
+  const helloId = controls.filter(item => item.type === 'hello').at(-1).helloId;
+  room.emit(RoomEvent.DataReceived, new TextEncoder().encode(JSON.stringify({ sessionId: 'session-2', seq: 1, type: 'ready', state: 'listening', inputReady: true, helloId })),
+    { kind: ParticipantKind.AGENT }, 0, 'xiaoyu.voice-lab');
+  assert.equal(states.at(-1), 'listening');
+  releaseStop();
+  for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(states.at(-1), 'listening', 'late cleanup of the old session must not mark the new one failed');
+  assert.equal(states.includes('failed'), false);
+});
+
 async function delayedAsrFixture() {
   const { EventEmitter } = await import('node:events');
   const { QwenSTT } = await import('../voice-agent/qwenStt.mjs');
   const { AudioFrame } = await import('@livekit/rtc-node');
-  const sent = [], diagnostics = []; let socket, readyCalls = 0, connected;
+  const sent = [], diagnostics = []; let socket, readyCalls = 0, appendCalls = 0, connected;
   const connection = new Promise(resolve => { connected = resolve; });
   class Socket extends EventEmitter {
     bufferedAmount = 0;
@@ -192,12 +251,12 @@ async function delayedAsrFixture() {
     terminate() { this.emit('close'); }
   }
   const provider = new QwenSTT({ config: { enabled: true, endpoint: 'wss://test.invalid', key: 'synthetic', language: 'zh' },
-    onInputReady: () => { readyCalls++; }, onDiagnostics: event => diagnostics.push(event),
+    onInputReady: () => { readyCalls++; }, onAppend: () => { appendCalls++; }, onDiagnostics: event => diagnostics.push(event),
     connect: () => { socket = new Socket(); queueMicrotask(() => { socket.emit('open'); connected(); }); return socket; } });
   const stream = provider.stream({ connOptions: { maxRetry: 0 } });
   const tick = () => new Promise(resolve => setImmediate(resolve));
   await connection;
-  return { stream, sent, diagnostics, tick, readyCalls: () => readyCalls,
+  return { stream, sent, diagnostics, tick, readyCalls: () => readyCalls, appendCalls: () => appendCalls,
     frame: value => new AudioFrame(Int16Array.from([value, value + 1, value + 2]), 16000, 1, 3),
     acknowledge: () => socket.emit('message', JSON.stringify({ type: 'session.updated' })),
     close: async () => { stream.close(); await provider.close(); await tick(); } };
@@ -209,9 +268,11 @@ test('delayed ASR handshake preserves first samples exactly once and signals rea
     f.stream.pushFrame(f.frame(101)); f.stream.pushFrame(f.frame(201));
     await f.tick();
     assert.equal(f.readyCalls(), 0);
+    assert.equal(f.appendCalls(), 0, 'queued frames have not reached the recogniser yet');
     assert.equal(f.sent.filter(item => item.type === 'input_audio_buffer.append').length, 0);
     f.acknowledge(); await f.tick();
     assert.equal(f.readyCalls(), 1);
+    assert.equal(f.appendCalls(), 2, 'every appended frame is reported, not only the first');
     const samples = f.sent.filter(item => item.type === 'input_audio_buffer.append').flatMap(item => {
       const bytes = Buffer.from(item.audio, 'base64'); return [0, 2, 4].map(index => bytes.readInt16LE(index));
     });

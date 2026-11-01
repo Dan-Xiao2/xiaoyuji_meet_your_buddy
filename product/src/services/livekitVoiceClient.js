@@ -6,9 +6,22 @@ export function createLivekitVoiceClient({ audioContainer, onEvent = () => {}, o
   // True only after the agent proves that microphone audio reached its recogniser. A bare
   // "ready" or a state event is not proof, and a dropped connection invalidates it.
   let inputReady = false;
+  // Each hello carries a new id; only a ready that answers the latest hello counts, so a ready
+  // sent before a reconnect and delivered after it cannot restore "listening".
+  let helloId = 0, expectedHello = null;
+  // stop() bumps the revision synchronously, then awaits remote cleanup. A new session may start
+  // meanwhile, so "failed" is shown only if no other session began after this one ended.
+  const failAfterStop = () => {
+    const stopping = stop(), ended = revision;
+    return stopping.then(() => { if (revision === ended) onState('failed'); });
+  };
   const armReadiness = (live) => {
     clearTimeout(readinessTimer);
-    readinessTimer = setTimeout(() => { if (live()) void stop().then(() => onState('failed')); }, 20000);
+    readinessTimer = setTimeout(() => { if (live()) void failAfterStop(); }, 20000);
+  };
+  const hello = () => {
+    expectedHello = ++helloId;
+    return control('hello', undefined, { helloId: expectedHello });
   };
   const post = async (path, body, keepalive = false) => {
     const response = await fetch(`/api/voice-lab/${path}`, { method: 'POST',
@@ -28,7 +41,7 @@ export function createLivekitVoiceClient({ audioContainer, onEvent = () => {}, o
   async function stop() {
     revision++;
     clearTimeout(readinessTimer); readinessTimer = null;
-    inputReady = false;
+    inputReady = false; expectedHello = null;
     const previous = room, previousCredentials = credentials;
     room = null; credentials = null;
     clearAudio();
@@ -62,7 +75,7 @@ export function createLivekitVoiceClient({ audioContainer, onEvent = () => {}, o
         if (event.sessionId !== ownedCredentials?.sessionId || !Number.isInteger(event.seq) || event.seq <= lastSequence) return;
         lastSequence = event.seq;
         onEvent(event);
-        if (event.type === 'ready' && event.inputReady === true) {
+        if (event.type === 'ready' && event.inputReady === true && expectedHello !== null && event.helloId === expectedHello) {
           clearTimeout(readinessTimer); readinessTimer = null; inputReady = true;
           if (microphoneReady) onState(event.state || 'listening');
         }
@@ -72,10 +85,14 @@ export function createLivekitVoiceClient({ audioContainer, onEvent = () => {}, o
       } catch { /* Ignore invalid remote data. */ }
     });
     current.on(RoomEvent.ParticipantConnected, participant => {
-      if (live() && microphoneReady && participant.kind === ParticipantKind.AGENT) void control('hello').catch(() => {});
+      if (!live() || !microphoneReady || participant.kind !== ParticipantKind.AGENT) return;
+      // A (re)joined agent has not yet received this microphone: proof must be given again.
+      if (inputReady) onState('waiting-agent');
+      inputReady = false; armReadiness(live);
+      void hello().catch(() => {});
     });
     // After a reconnect the agent must answer the new hello again before the page shows listening.
-    current.on(RoomEvent.Reconnected, () => { if (live()) { armReadiness(live); void control('hello').catch(() => {}); } });
+    current.on(RoomEvent.Reconnected, () => { if (live()) { inputReady = false; armReadiness(live); void hello().catch(() => {}); } });
     current.on(RoomEvent.Reconnecting, () => { if (live()) { inputReady = false; onState('reconnecting'); } });
     current.on(RoomEvent.Disconnected, () => { if (live()) void stop(); });
     try {
@@ -88,18 +105,18 @@ export function createLivekitVoiceClient({ audioContainer, onEvent = () => {}, o
       await current.localParticipant.setMicrophoneEnabled(true);
       if (!live()) { await current.disconnect(true); return; }
       microphoneReady = true;
-      await control('hello');
+      await hello();
       if (!live()) return;
       if (!inputReady) armReadiness(live);
       onState(inputReady ? 'listening' : 'waiting-agent');
     } catch (error) {
-      if (live()) { await stop(); onState('failed'); throw error; }
+      if (live()) { await failAfterStop(); throw error; }
     } finally { starting = false; }
   }
-  async function control(type, text) {
+  async function control(type, text, extra = {}) {
     if (!room || !credentials) return;
     await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
-      type, text, sessionId: credentials.sessionId
+      type, text, sessionId: credentials.sessionId, ...extra
     })), { reliable: true, topic: 'xiaoyu.voice-lab.control' });
   }
   async function sendText(text) {

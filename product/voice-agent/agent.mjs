@@ -16,13 +16,20 @@ export default defineAgent({
     if (!/^voice-lab-[\w-]+$/.test(meta.sessionId || '') || !meta.identity) throw new Error('Missing lab session identity');
     const synthetic = process.env.VOICE_LAB_PROVIDER === 'synthetic';
     let stopped = false, sequence = 0, endingSpeechId = null, currentSpeechId = null, started = false;
-    // The synthetic provider has no recogniser that can prove audio arrived, so it is ready once started.
-    // The real provider is ready only after its first audio frame has been appended to the recogniser.
-    let inputReady = synthetic;
+    // Readiness answers one client hello: the client's latest hello waits here until audio appended
+    // to the recogniser AFTER it proves the microphone reaches us (again, after a reconnect). The
+    // synthetic provider has no recogniser that can prove this, so it answers once started.
+    let pendingHello = null;
     // Speech start warms a socket for the model request; the final transcript warms a second one
     // for the first speech request, which starts while the model request still holds its socket.
     const warmProvider = synthetic ? () => {} : createProviderWarmup();
-    const readyState = () => ({ provider: synthetic ? 'synthetic' : 'qwen', state: session.agentState, inputReady });
+    const readyState = (helloId, inputReady) => ({ provider: synthetic ? 'synthetic' : 'qwen', state: session.agentState, helloId, inputReady });
+    const prove = () => {
+      if (!started || pendingHello === null) return;
+      const helloId = pendingHello;
+      pendingHello = null;
+      publish('ready', readyState(helloId, true));
+    };
     // The SDK ignores interruptions AND discards microphone input for the first 3 s of the agent's
     // first speech in a session (echo-cancellation warm-up). A child speaking then is not heard.
     // Kept at the SDK default until real-device echo tests justify a shorter value.
@@ -31,7 +38,7 @@ export default defineAgent({
       ...(aecWarmupMs !== undefined && aecWarmupMs !== '' ? { aecWarmupDuration: Number(aecWarmupMs) || null } : {}),
       vad: ctx.proc.userData.vad,
       stt: synthetic ? new stt.StreamAdapter(new SyntheticSTT(), ctx.proc.userData.vad) : new QwenSTT({
-        onInputReady: () => { if (inputReady) return; inputReady = true; if (started) publish('ready', readyState()); },
+        onAppend: prove,
         onDiagnostics: event => {
           if (event.stage === 'asr-speech-started' || event.stage === 'asr-transcript') void warmProvider();
           publish('timing', event);
@@ -83,7 +90,10 @@ export default defineAgent({
       try {
         const message = JSON.parse(new TextDecoder().decode(bytes));
         if (message.sessionId !== meta.sessionId) return;
-        if (message.type === 'hello') { if (started) publish('ready', readyState()); }
+        if (message.type === 'hello' && Number.isInteger(message.helloId)) {
+          pendingHello = message.helloId;
+          if (synthetic) prove(); else if (started) publish('ready', readyState(message.helloId, false));
+        }
         if (message.type === 'stop') void stop();
         if (message.type === 'interrupt') void session.interrupt();
         if (message.type === 'text' && typeof message.text === 'string' && message.text.trim() && message.text.length <= 1000) {
@@ -96,7 +106,7 @@ export default defineAgent({
     await session.start({ agent, room: ctx.room, record: false,
       inputOptions: { participantIdentity: meta.identity, textEnabled: false, videoEnabled: false } });
     started = true;
-    publish('ready', readyState());
+    if (synthetic) prove(); else publish('ready', readyState(pendingHello, false));
   }
 });
 
