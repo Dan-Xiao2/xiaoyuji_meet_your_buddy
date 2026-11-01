@@ -320,12 +320,26 @@ async function callQwenTutor(input, currentState, localState, knowledge, signal,
 
 }
 
+// A reply the child spoke over was not heard to the end, so it is marked in the history; the model
+// must not treat its content (for example a suggestion the child then rejects) as accepted.
+function historyLine(message) {
+  const name = message.speakerName || message.role;
+  return message.interrupted ? `${name}（说到一半被孩子打断，孩子可能没听完）: ${message.text}` : `${name}: ${message.text}`;
+}
+
+// The quick reply is read aloud. Without this, replies to "why" questions fell into a textbook
+// "因为……。……。所以……。" pattern (6 of 8 sampled answers on 2026-11-02).
+// Seen on a real iPhone (2026-11-02): after the child said there was no "软软的沙子", Xiaoyu kept
+// talking about it; and speech recognition can turn words into same-sounding ones (牛肝菌 → 牛杆菌).
+const followChildInstruction = "孩子否定或纠正时（比如说“没有”“不是”“不对”），以孩子这句为准：当作“那里没有／不是这样”，不要猜成它的反面（比如“没有软软的沙子”不能理解成“沙子是硬的”），也不再追问被否定的东西；简短接住后，问一句或听孩子说实际看到了什么。被孩子打断的话不要接着讲完。孩子的话来自语音转写，可能有同音错字；结合上下文理解真正的意思，沿用前文已经出现的正确说法（例如前面说的是牛肝菌，就不要改成同音的别的词），不要纠正孩子的发音。";
+const spokenStyleInstruction = "说话像坐在孩子身边随口聊天，不像讲课或念课本：先用孩子自己的词接住他说的话，再用口语讲。不要用“因为……所以……”框住整段回答，不要每轮都用同样的开头或结尾，语气词不要堆叠。口语化不等于换掉原因：为什么问题仍要先把真正的原因说对，再配一个看得见的例子。";
+
 function buildQuickReplyBody(input, currentState, knowledge, { stream = false } = {}) {
   const model = process.env.QWEN_MODEL || "qwen3.7-flash";
   const speaker = currentState.activeSpeaker || { name: currentState.profile?.name || "孩子", role: "child" };
   const recentMessages = safeConversationMessages(currentState.messages)
     .slice(-12)
-    .map((message) => `${message.speakerName || message.role}: ${message.text}`)
+    .map(historyLine)
     .join("\n");
   return JSON.stringify({
     model,
@@ -346,6 +360,8 @@ function buildQuickReplyBody(input, currentState, knowledge, { stream = false } 
             : "这是家人说的话。简短确认这是家人观察，并邀请补充具体情境，不把它说成孩子原话。",
           "不要输出JSON、Markdown、标题或设计说明。不要索要姓名、地址、学校、电话、照片等信息。",
           "孩子明确要求故事时才讲一个很短的开头；普通为什么问题先直接解释。",
+          spokenStyleInstruction,
+          followChildInstruction,
           createKnowledgeContext(knowledge)
         ].join("\n")
       },
@@ -523,7 +539,7 @@ function createUserPrompt(input, currentState, localState) {
   const speaker = currentState.activeSpeaker || { name: profile.name || "孩子", role: "child" };
   const recentMessages = safeConversationMessages(currentState.messages)
     .slice(-12)
-    .map((message) => `${message.speakerName || message.role}: ${message.text}`)
+    .map(historyLine)
     .join("\n");
 
   return JSON.stringify(

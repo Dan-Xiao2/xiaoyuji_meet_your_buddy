@@ -20,7 +20,8 @@ export function createTutorContext(state = {}) {
       .filter(message => message && typeof message.text === "string"))
       .filter(message => ["child", "tutor"].includes(message.role)).slice(-12).map(message => ({
         role: message.role, text: text(message.text, 4000),
-        speakerName: text(message.speakerName, 80), speakerRole: text(message.speakerRole, 30)
+        speakerName: text(message.speakerName, 80), speakerRole: text(message.speakerRole, 30),
+        ...(message.role === "tutor" && message.interrupted === true ? { interrupted: true } : {})
       })),
     memory: { interests: texts(state.memory?.interests, 6, 80), recentWins: texts(state.memory?.recentWins, 4, 100) },
     board: { type: "blank" },

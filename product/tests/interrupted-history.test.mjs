@@ -1,0 +1,24 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createTutorContext } from "../src/services/tutorContext.js";
+
+test("an interrupted reply keeps its mark into the model history, labelled as possibly unheard", async t => {
+  const context = createTutorContext({ messages: [
+    { role: "child", text: "我今天去公园玩了", interrupted: true },
+    { role: "tutor", text: "公园里有软软的沙子。", speakerName: "小宇", interrupted: true },
+    { role: "tutor", text: "完整听完的回答。", speakerName: "小宇" }
+  ] });
+  assert.equal("interrupted" in context.messages[0], false, "only Xiaoyu's replies can be interrupted");
+  assert.equal(context.messages[1].interrupted, true);
+  assert.equal("interrupted" in context.messages[2], false);
+
+  process.env.QWEN_API_KEY = "test-key"; process.env.QWEN_BASE_URL = "https://example.invalid/compatible-mode/v1";
+  let body;
+  t.mock.method(globalThis, "fetch", async (url, options) => { body = JSON.parse(options.body); throw new Error("captured"); });
+  const { createQuickTutorReplyWithQwen } = await import("../server/qwenTutor.mjs");
+  await createQuickTutorReplyWithQwen("没有软软的沙子", { ...context, profile: { ageBand: "4-5" } }, "好的。");
+  const history = JSON.parse(body.messages[1].content).recentMessages;
+  assert.match(history, /小宇（说到一半被孩子打断，孩子可能没听完）: 公园里有软软的沙子。/);
+  assert.match(history, /小宇: 完整听完的回答。/);
+  assert.match(body.messages[0].content, /不要猜成它的反面/);
+});

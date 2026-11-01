@@ -3,7 +3,10 @@
 // Only allow-listed fields are stored. Never text, audio, names, or anything a child said.
 const STORAGE_KEY = "xiaoyuji-pilot-log-v1";
 const CODE = /^[a-z0-9-]{1,40}$/;
-const FAILURE_STAGES = new Set(["asr-realtime-fallback", "tts-stream-fallback", "tts-cloud-failed", "tts-cloud-mp3"]);
+// Fallbacks, and the "did not hear the child" cases: capture errors, no speech, nothing recognised,
+// and interruptions that heard nothing (likely false triggers).
+const FAILURE_STAGES = new Set(["asr-realtime-fallback", "tts-stream-fallback", "tts-cloud-failed", "tts-cloud-mp3",
+  "capture-error", "capture-idle", "capture-empty", "barge-in-empty"]);
 
 function percentile(sorted, p) {
   if (!sorted.length) return null;

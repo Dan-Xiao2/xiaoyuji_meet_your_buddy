@@ -1,11 +1,13 @@
 // Owns the legacy half-duplex media lifecycle, without DOM or archive access.
-export function createVoiceSession({ voice, getContext, ui, narration, onInput, onTiming, onLevel, trace = () => {}, onChange = () => {},
+export function createVoiceSession({ voice, getContext, ui, narration, onInput, onTiming, onLevel, trace = () => {}, onChange = () => {}, onBargeIn = () => {},
   clock = { now: () => performance.now(), setTimeout: (fn, delay) => setTimeout(fn, delay), clearTimeout: id => clearTimeout(id) }
 }) {
   let input = "idle", output = "idle", autoListen = false;
   let captureRevision = 0, playbackRevision = 0, timer = null;
   let replyMessageId = null, turnStartedAt = null;
   let failure = null, readyDetail = "";
+  // Barge-in: while a reply plays, a speaking child stops it and is listened to (context.bargeIn).
+  let bargeWatch = null, playStartedAt = null;
 
   const emit = (type, details = {}) => trace(type, {
     sessionId: getContext().sessionId, captureRevision, playbackRevision, ...details
@@ -32,7 +34,13 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     onChange();
   }
 
+  function stopWatch() {
+    bargeWatch?.stop();
+    bargeWatch = null;
+  }
+
   function stopOutput() {
+    stopWatch();
     playbackRevision++;
     output = "idle";
     voice.stopSpeaking();
@@ -85,7 +93,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     onChange();
   }
 
-  function beginInput({ automated = false } = {}) {
+  function beginInput({ automated = false, afterBargeIn = false } = {}) {
     const context = { ...getContext() };
     const blocked = listenBlock(context, automated);
     if (blocked) { emit("media.listen-skipped", { reason: blocked }); return; }
@@ -94,6 +102,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     if (!automated) { voice.preparePlayback(); autoListen = true; }
     clearTimer();
     stopOutput();
+    // afterBargeIn: a capture that follows a barge-in and hears nothing suggests a false trigger.
     const revision = ++captureRevision;
     const captureIdentity = { sessionId: context.sessionId, captureRevision: revision };
     const live = (report = false) => {
@@ -107,6 +116,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     voice.listen({
       preferRecorder: Boolean(context.cloudTranscription && voice.recordingSupported),
       preferRealtime: Boolean(context.realtimeTranscription),
+      asrCorpus: context.asrCorpus || "",
       onStart: (details = {}) => {
         if (!live(true)) return;
         if (input !== "capturing") { voice.finishListening(); return; }
@@ -124,6 +134,8 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       onResult: text => { if (live()) ui.transcript(text || "正在听..."); },
       onError: message => {
         if (!live(true)) return;
+        // "Xiaoyu did not hear me" cases are counted for the family pilot: errors, no speech, nothing recognised.
+        onTiming({ stage: "capture-error", latencyMs: 0 });
         emit("media.capture-failed", captureIdentity);
         pause();
         failure = "capture";
@@ -132,6 +144,8 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       },
       onIdle: () => {
         if (!live(true)) return;
+        onTiming({ stage: "capture-idle", latencyMs: 0 });
+        if (afterBargeIn) onTiming({ stage: "barge-in-empty", latencyMs: 0 });
         pause({ detail: "我先等一等，点我继续聊" });
         ui.transcript("");
       },
@@ -141,7 +155,11 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
         captureRevision++;
         input = "idle";
         onChange();
-        if (!text) { pause(); return; }
+        if (!text) {
+          onTiming({ stage: "capture-empty", latencyMs: 0 });
+          if (afterBargeIn) onTiming({ stage: "barge-in-empty", latencyMs: 0 });
+          pause(); return;
+        }
         onInput(text, { captureRevision: revision });
       }
     });
@@ -182,6 +200,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     function next(index) {
       if (!live(true)) return;
       if (index >= sequence.length) {
+        stopWatch();
         output = "idle";
         readyDetail = farewell ? "" : "还想告诉我什么？"; onChange();
         if (!farewell) schedule();
@@ -206,6 +225,18 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
           if (settled || output === "playing") { emit("media.callback-rejected", { ...playbackIdentity, reason: "settled", segmentIndex: index }); return; }
           output = "playing";
           emit("media.play-started", { ...playbackIdentity, segmentIndex: index });
+          if (!bargeWatch && !farewell && context.bargeIn && voice.watchForBargeIn) {
+            playStartedAt = clock.now();
+            bargeWatch = voice.watchForBargeIn(() => {
+              bargeWatch = null;
+              if (!live(true) || output === "idle") return;
+              onTiming({ stage: "barge-in", latencyMs: clock.now() - playStartedAt });
+              emit("media.barge-in", playbackIdentity);
+              // The child did not hear the rest of this reply; the next model turn must know that.
+              if (messageId) onBargeIn(messageId);
+              beginInput({ afterBargeIn: true });
+            });
+          }
           if (steps && previousEnd !== null) {
             onTiming({ stage: "drawing-segment-gap", latencyMs: clock.now() - previousEnd });
           } else if (turnStartedAt !== null) {

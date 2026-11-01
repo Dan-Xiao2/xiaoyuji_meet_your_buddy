@@ -3,6 +3,7 @@ import { createPcmPlayer } from "./pcmPlayer.js";
 import { cropRecordedAudio } from "./recordedAudio.js";
 import { createRealtimeCapture } from "./realtimeAsr.js";
 import { getMicrophoneId, openMicrophone, microphoneError } from "./microphoneInput.js";
+import { startBargeInMonitor } from "./bargeIn.js";
 
 export function createVoiceController() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -31,6 +32,39 @@ export function createVoiceController() {
   let pcmPlayer = null;
   let transcriptionController = null;
   let realtimeCapture = null;
+  // A microphone stream opened by the barge-in monitor, waiting to be reused by the next capture.
+  let handoffStream = null;
+  let handoffTimer = null;
+
+  function dropHandoff() {
+    window.clearTimeout(handoffTimer);
+    handoffTimer = null;
+    handoffStream?.getTracks().forEach((track) => track.stop());
+    handoffStream = null;
+  }
+
+  function takeHandoff() {
+    const next = handoffStream;
+    window.clearTimeout(handoffTimer);
+    handoffTimer = null;
+    handoffStream = null;
+    if (next?.getAudioTracks()[0]?.readyState === "live") return next;
+    next?.getTracks().forEach((track) => track.stop());
+    return null;
+  }
+
+  // While a reply plays, listen for the child starting to speak. onBargeIn is called once; the
+  // open stream is kept briefly for the capture that follows (unused, it is released after 2 s).
+  function watchForBargeIn(onBargeIn) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!recordingSupported || !secureEnough || !AudioContextClass) return { stop() {} };
+    return startBargeInMonitor({ openStream: openMicrophone, AudioContextClass, onTrigger: (opened) => {
+      dropHandoff();
+      handoffStream = opened;
+      handoffTimer = window.setTimeout(dropHandoff, 2000);
+      onBargeIn();
+    } });
+  }
 
   function preparePlayback() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -41,7 +75,7 @@ export function createVoiceController() {
     } catch { /* Whole-response cloud audio remains available. */ }
   }
 
-  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRecorder = false, preferRealtime = false }) {
+  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRecorder = false, preferRealtime = false, asrCorpus = "" }) {
     stopListening();
     finishRequested = false;
     const requestId = listeningRequestId;
@@ -52,7 +86,7 @@ export function createVoiceController() {
     }
 
     if (preferRecorder && recordingSupported) {
-      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime }, requestId);
+      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime, asrCorpus }, requestId);
       return;
     }
 
@@ -139,7 +173,7 @@ export function createVoiceController() {
     if (recorder && recorder.state !== "inactive") recorder.stop();
   }
 
-  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime = false }, requestId) {
+  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime = false, asrCorpus = "" }, requestId) {
     if (!secureEnough) {
       onError?.("浏览器要求在 localhost 或 HTTPS 页面里使用麦克风。请用本地预览地址打开。");
       return;
@@ -151,7 +185,7 @@ export function createVoiceController() {
     }
 
     try {
-      const nextStream = await openMicrophone();
+      const nextStream = takeHandoff() || await openMicrophone();
       if (requestId !== listeningRequestId || finishRequested) {
         nextStream.getTracks().forEach((track) => track.stop());
         if (requestId === listeningRequestId) onEnd?.("");
@@ -188,7 +222,7 @@ export function createVoiceController() {
     let realtime = null;
     if (preferRealtime) {
       try {
-        realtime = await createRealtimeCapture(stream, { onTiming });
+        realtime = await createRealtimeCapture(stream, { onTiming, corpus: asrCorpus });
         if (requestId !== listeningRequestId || finishRequested) {
           realtime.cancel();
           if (requestId === listeningRequestId) { cleanupRecorderOnly(); onEnd?.(""); }
@@ -637,6 +671,7 @@ export function createVoiceController() {
     stopListening,
     speak,
     prefetchSpeech,
-    stopSpeaking
+    stopSpeaking,
+    watchForBargeIn
   };
 }

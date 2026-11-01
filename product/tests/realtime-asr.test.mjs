@@ -91,6 +91,22 @@ test("an unauthorized client cannot open a paid recognition connection", async t
   assert.equal(upstreams.length, 0);
 });
 
+test("conversation context sent before audio becomes recogniser corpus; a second or late context is refused", async t => {
+  const { origin, upstreams } = await fixture(t);
+  const ws = new WebSocket(origin.replace("http", "ws") + "/api/asr/realtime", { origin });
+  await once(ws, "open");
+  ws.send(JSON.stringify({ type: "context", text: "小宇\n牛肝菌是一种蘑菇" }));
+  await tick();
+  const upstream = upstreams.at(-1);
+  const updates = upstream.events.filter(event => event.type === "session.update");
+  assert.equal(updates.at(-1).session.input_audio_transcription.corpus.text, "小宇\n牛肝菌是一种蘑菇");
+  const messages = []; ws.on("message", raw => messages.push(JSON.parse(raw)));
+  ws.send(JSON.stringify({ type: "context", text: "第二次" }));
+  await once(ws, "close");
+  assert.deepEqual(messages, [{ type: "error", code: "invalid-request" }]);
+  assert.equal(upstream.events.filter(event => event.type === "session.update").length, updates.length, "no update from a refused context");
+});
+
 test("cancel disconnects upstream; a new utterance has no old audio or late result", async t => {
   const { client } = await fixture(t);
   const first = await client();

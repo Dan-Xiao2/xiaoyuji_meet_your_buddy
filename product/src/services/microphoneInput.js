@@ -9,6 +9,18 @@ export function setMicrophoneId(id) {
   else window.localStorage.removeItem(MICROPHONE_KEY);
 }
 
+// Speaking over Xiaoyu interrupts it unless a parent turned this off (e.g. too many false
+// interruptions from a phone speaker). Device-local, like the microphone choice.
+export const BARGE_IN_KEY = "xiaoyuji-barge-in-v1";
+
+export function getBargeInEnabled() {
+  try { return window.localStorage?.getItem(BARGE_IN_KEY) !== "off"; } catch { return true; }
+}
+
+export function setBargeInEnabled(enabled) {
+  try { window.localStorage.setItem(BARGE_IN_KEY, enabled ? "on" : "off"); } catch { /* keep the in-page choice */ }
+}
+
 export async function openMicrophone() {
   const id = getMicrophoneId();
   const stream = await navigator.mediaDevices.getUserMedia({ audio: {

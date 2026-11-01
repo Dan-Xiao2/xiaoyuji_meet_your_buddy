@@ -5,7 +5,7 @@ const eventTypes = new Set([
   "drawing.requested", "drawing.received", "drawing.cancelled", "drawing.rejected", "drawing.accepted", "drawing.failed",
   "media.capture-started", "media.capture-processing", "media.capture-completed", "media.capture-failed",
   "media.play-requested", "media.play-started", "media.play-ended", "media.play-failed", "media.play-skipped",
-  "media.cancelled", "media.callback-rejected", "media.listen-scheduled", "media.listen-skipped", "interaction.stopped"
+  "media.cancelled", "media.barge-in", "media.callback-rejected", "media.listen-scheduled", "media.listen-skipped", "interaction.stopped"
 ]);
 const phases = new Set(["idle", "started", "pending", "quick", "enrichment", "result-ready", "complete", "protected",
   "cancelled", "rejected", "failed", "route", "plan", "image", "capturing", "processing", "preparing", "playing"]);

@@ -7,7 +7,7 @@ const AGE_PROFILES = {
   "4-5": {
     maxSentences: 3,
     maxCharacters: 150,
-    instruction: "每轮 2-3 个短句，可以用简单的“因为、所以”和可观察的例子。不必提问，必要时最多问一个问题。"
+    instruction: "每轮 2-3 个短句；讲一个原因时配一个孩子看得见的例子，不套用“因为……所以……”的句式。不必提问，必要时最多问一个问题。"
   },
   "5-6": {
     maxSentences: 4,

@@ -1,4 +1,6 @@
-export async function createRealtimeCapture(stream, { onTiming } = {}) {
+// corpus: recent conversation text, sent before any audio so the recogniser prefers words already
+// used in this conversation over same-sounding ones.
+export async function createRealtimeCapture(stream, { onTiming, corpus = "" } = {}) {
   const context = new AudioContext({ sampleRate: 16000 });
   let node, source, socket, timer, flushTimer, flushResolve;
   let active = false, ready = false, stopped = false, finishing = false, settled = false;
@@ -65,6 +67,7 @@ export async function createRealtimeCapture(stream, { onTiming } = {}) {
       try { socket = new WebSocket(url); } catch { fail("connect-failed"); return; }
       timer = setTimeout(() => fail("connect-timeout"), 5500);
       socket.onerror = () => fail("connection-failed");
+      socket.onopen = () => { if (!settled && corpus) socket.send(JSON.stringify({ type: "context", text: corpus.slice(0, 2000) })); };
       socket.onclose = () => { if (!settled) fail("disconnected"); };
       socket.onmessage = ({ data }) => {
         if (settled) return;

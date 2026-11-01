@@ -35,6 +35,14 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
   sockets.on("connection", client => {
     const settings = config();
     let upstream, done = false, ready = false, committed = false, bytes = 0, timer;
+    // Recent conversation text sent by the browser before any audio. Passed to the recogniser as
+    // context so a word already in the conversation wins over a same-sounding one (牛肝菌, not 牛杆菌).
+    let corpus = "", sessionSent = false;
+    const configure = () => {
+      sessionSent = true;
+      emit("session.update", { session: { modalities: ["text"], input_audio_format: "pcm", sample_rate: 16000,
+        input_audio_transcription: { language: settings.language, ...(corpus ? { corpus: { text: corpus } } : {}) }, turn_detection: null } });
+    };
     const send = data => { if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(data)); };
     const close = () => {
       clearTimeout(timer);
@@ -59,7 +67,7 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
     deadline(5000);
     upstream.on("open", () => {
       if (done) return;
-      emit("session.update", { session: { modalities: ["text"], input_audio_format: "pcm", sample_rate: 16000, input_audio_transcription: { language: settings.language }, turn_detection: null } });
+      configure();
     });
     upstream.on("error", () => fail("upstream-error"));
     upstream.on("close", () => { if (!done) fail("disconnected"); });
@@ -87,6 +95,15 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
     });
     client.on("message", (raw, binary) => {
       if (done) return;
+      if (!binary && !ready && !committed) {
+        let event;
+        try { event = JSON.parse(String(raw)); } catch { fail("invalid-request"); return; }
+        if (event.type !== "context" || typeof event.text !== "string" || corpus) { fail("invalid-request"); return; }
+        corpus = event.text.trim().slice(0, 2000);
+        // Usually the context arrives before the provider connection opens; if not, update the session.
+        if (corpus && sessionSent && upstream.readyState === WebSocket.OPEN) configure();
+        return;
+      }
       if (!ready || committed) { fail("invalid-state"); return; }
       if (binary) {
         bytes += raw.length;

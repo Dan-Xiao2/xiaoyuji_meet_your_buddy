@@ -1,0 +1,98 @@
+// Barge-in in the real page: speaking while Xiaoyu's reply plays stops it and starts listening;
+// with the switch off, the same speech does not interrupt and no microphone is opened.
+// The microphone is a synthetic Web Audio tone; no physical microphone or external API is used.
+import assert from "node:assert/strict";
+import { createInitialState } from "../src/data/studentModel.js";
+
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
+const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH, args: ["--autoplay-policy=no-user-gesture-required"] });
+try {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage(), errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  const state = createInitialState();
+  state.uiVersion = 4;
+  state.profile = { ...state.profile, name: "虚构插话测试", ageBand: "4-5", configured: true, consent: true };
+  state.session = { id: "barge-in-test", status: "active", turnCount: 0 };
+  await page.addInitScript(initial => {
+    localStorage.setItem("xiaoyuji-learning-state-v1", JSON.stringify(initial));
+    window.micOpens = 0; window.micSpeaking = false; window.recognitionStarts = 0;
+    navigator.mediaDevices.getUserMedia = async () => {
+      window.micOpens++;
+      const audio = new AudioContext(); await audio.resume();
+      const tone = audio.createOscillator(), gain = audio.createGain(), out = audio.createMediaStreamDestination();
+      tone.frequency.value = 220; tone.connect(gain).connect(out); tone.start();
+      const set = () => { gain.gain.value = window.micSpeaking ? 0.6 : 0; requestAnimationFrame(set); };
+      set();
+      return out.stream;
+    };
+    window.SpeechRecognition = class {
+      start() { window.currentRecognition = this; window.recognitionStarts++; this.onstart?.(); }
+      abort() {} stop() {}
+    };
+    window.emitSpeech = text => {
+      const recognition = window.currentRecognition, result = [{ transcript: text }]; result.isFinal = true;
+      recognition.onresult({ resultIndex: 0, results: [result] }); recognition.onend();
+    };
+    const fetchOriginal = window.fetch.bind(window);
+    window.fetch = async (url, options) => {
+      if (url !== "/api/speech/stream") return fetchOriginal(url, options);
+      // Four seconds of quiet PCM keep the reply playing long enough to interrupt it.
+      return new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(24000 * 2 * 4)); controller.close(); } }),
+        { headers: { "content-type": "audio/pcm", "X-Voice-Latency-Ms": "5" } });
+    };
+  }, state);
+  const quickRequests = [];
+  await page.route("**/api/**", async route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/tutor/quick") quickRequests.push(route.request().postDataJSON());
+    const body = pathname === "/api/whiteboard/route" ? { mode: "chat" }
+      : pathname === "/api/tutor/quick" ? { reply: "蜗牛背着小房子慢慢爬，它走过的地方会留下一条亮亮的线。", llmStatus: { used: true } }
+      : pathname === "/api/tutor" ? { ...route.request().postDataJSON().state, board: { type: "blank" }, growthEvidence: { shouldSave: false }, llmStatus: { used: true } }
+      : {};
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto(process.env.TEST_URL || "http://127.0.0.1:4197/");
+  await page.waitForFunction(() => document.documentElement.dataset.appReady === "true");
+  const phase = () => page.evaluate(() => document.querySelector(".child-voice-dock").dataset.voicePhase);
+  // Like a child: tap Xiaoyu (a user gesture, which also unlocks streamed playback), then speak.
+  const ask = async (text, { tap = true } = {}) => {
+    const before = await page.evaluate(() => window.recognitionStarts);
+    if (tap) {
+      await page.locator("#mainVoiceButton").click();
+      await page.waitForFunction(count => window.recognitionStarts > count, before);
+    }
+    await page.evaluate(text => window.emitSpeech(text), text);
+  };
+
+
+  await ask("虚构：蜗牛为什么慢");
+  await page.waitForFunction(() => document.querySelector(".child-voice-dock").dataset.voicePhase === "speaking");
+  await page.waitForTimeout(700); // past the echo warm-up
+  assert.equal(await phase(), "speaking");
+  const listeningBefore = await page.evaluate(() => window.recognitionStarts);
+  await page.evaluate(() => { window.micSpeaking = true; });
+  await page.waitForFunction(count => window.recognitionStarts > count && document.querySelector(".child-voice-dock").dataset.voicePhase !== "speaking", listeningBefore, { timeout: 3000 });
+  await page.evaluate(() => { window.micSpeaking = false; });
+  const pilot = await page.evaluate(() => JSON.parse(sessionStorage.getItem("xiaoyuji-pilot-log-v1") || "[]"));
+  assert.ok(pilot.some(entry => entry.stage === "barge-in" && entry.latencyMs >= 500), "the interruption is measured");
+
+  // Switch off: the same speech over the next reply neither interrupts nor opens a microphone.
+  await page.evaluate(() => { const toggle = document.querySelector("[data-barge-in]"); toggle.checked = false; toggle.dispatchEvent(new Event("change")); });
+  assert.equal(await page.evaluate(() => localStorage.getItem("xiaoyuji-barge-in-v1")), "off");
+  await ask("虚构：蜗牛住在哪里", { tap: false }); // already listening after the interruption
+  await page.waitForFunction(() => document.querySelector(".child-voice-dock").dataset.voicePhase === "speaking");
+  const opens = await page.evaluate(() => window.micOpens);
+  await page.evaluate(() => { window.micSpeaking = true; });
+  await page.waitForTimeout(1500);
+  assert.equal(await phase(), "speaking", "with the switch off the reply keeps playing");
+  assert.equal(await page.evaluate(() => window.micOpens), opens, "no microphone is opened while it is off");
+  // The reply the child spoke over is marked in the next request, so the model knows it was not heard to the end.
+  const history = quickRequests.at(-1).state.messages.filter(message => message.role === "tutor");
+  assert.equal(history.at(-1).interrupted, true, "the interrupted reply is marked in the next request");
+  assert.deepEqual(errors, []);
+  console.log("PASS barge-in: speaking over a reply stops it and listens; switched off it does neither");
+  await context.close();
+} finally {
+  await browser.close();
+}

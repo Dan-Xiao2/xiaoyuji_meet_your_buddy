@@ -20,6 +20,8 @@ import { deriveVoiceUiState, getVoiceStageLayout, shouldFinishVoiceOnRelease } f
 import { renderMemoryArchive, renderMemoryDashboard } from "./ui/memoryPanel.js";
 import { mountArchiveControls } from "./ui/archiveControls.js";
 import { mountMicrophoneSettings } from "./ui/microphoneSettings.js";
+import { recognitionCorpus } from "./features/voice/recognitionCorpus.js";
+import { getBargeInEnabled, setBargeInEnabled } from "./services/microphoneInput.js";
 import { createPilotLog } from "./services/pilotLog.js";
 import { bindPilotLogPanel } from "./ui/pilotLogPanel.js";
 import { REVISION_KEY } from "./services/localPersistence.js";
@@ -200,6 +202,15 @@ let hasLiveVoiceLevel = false;
 let voicePressStartedAt = 0;
 let voicePointerStopsExisting = false;
 const microphoneSettings = mountMicrophoneSettings({ beforeCapture: () => stopInteraction() });
+const bargeInToggle = document.querySelector("[data-barge-in]");
+// Replies the child spoke over. The next request marks them, so the model does not assume the child
+// heard (or accepted) the rest. Marked only in the next request's history, never on the reply that
+// is still the current turn's target, so in-flight commits are not disturbed.
+const interruptedReplies = new Set();
+if (bargeInToggle) {
+  bargeInToggle.checked = getBargeInEnabled();
+  bargeInToggle.addEventListener("change", () => setBargeInEnabled(bargeInToggle.checked));
+}
 const pilotLog = (() => { try { return createPilotLog({ storage: window.sessionStorage }); } catch { return createPilotLog(); } })();
 bindPilotLogPanel(document.querySelector("#pilotSettings"), pilotLog, {
   getContext: () => ({ userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } })
@@ -212,7 +223,10 @@ const voiceSession = createVoiceSession({
     canListen: dom.workspace.dataset.activeView === "learn" && !document.hidden,
     pending: conversation.getSnapshot().awaitingReply || drawingRequests.getSnapshot().phase === "pending",
     cloudTranscription: voiceCloudStatus?.cloudTranscription,
-    realtimeTranscription: voiceCloudStatus?.realtimeTranscription
+    realtimeTranscription: voiceCloudStatus?.realtimeTranscription,
+    bargeIn: Boolean(bargeInToggle?.checked),
+    // A getter: getContext() runs on every audio frame, the corpus is needed once per capture.
+    get asrCorpus() { return recognitionCorpus(state.messages); }
   }),
   ui: {
     beforeListen: () => microphoneSettings.reset(),
@@ -238,7 +252,8 @@ const voiceSession = createVoiceSession({
   },
   onInput: (text, source) => { dom.childInput.value = text; sendChildInput(text, source); },
   onTiming: recordVoiceTiming,
-  onLevel: applyVoiceLevel
+  onLevel: applyVoiceLevel,
+  onBargeIn: replyMessageId => interruptedReplies.add(replyMessageId)
 });
 runtimeDiagnostics.register("conversation", conversation.getSnapshot);
 runtimeDiagnostics.register("drawingPlan", drawingRequests.getSnapshot);
@@ -680,7 +695,7 @@ async function sendChildInput(text, source = {}) {
   const stateForRequest = {
     ...state,
     messages: [
-      ...state.messages,
+      ...state.messages.map(message => (interruptedReplies.has(message.id) && !message.interrupted ? { ...message, interrupted: true } : message)),
       {
         role: "child",
         id: `${turn.turnId}:child`,

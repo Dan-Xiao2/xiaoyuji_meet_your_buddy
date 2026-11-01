@@ -1,6 +1,6 @@
 import { recoverArchiveTransaction, STATE_KEY, assertArchiveRevision, commitArchivePair } from "./localPersistence.js";
 import { stateForPersistence, mayArchiveMoment } from "./safety.js";
-import { MICROPHONE_KEY } from "./microphoneInput.js";
+import { BARGE_IN_KEY, MICROPHONE_KEY } from "./microphoneInput.js";
 import { clearDurableArchive, scheduleDurableArchive } from "./indexedArchive.js";
 import { readArchiveValue } from "./archiveIntegrity.js";
 const STORAGE_KEY = STATE_KEY;
@@ -22,6 +22,7 @@ export function saveState(state) {
 export function clearState() {
   commitArchivePair(window.localStorage, null, null);
   window.localStorage.removeItem(MICROPHONE_KEY);
+  window.localStorage.removeItem(BARGE_IN_KEY);
   clearDurableArchive();
 }
 
