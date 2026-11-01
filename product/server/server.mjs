@@ -11,6 +11,7 @@ import { getSpeechStatus, synthesizeSpeech, transcribeAudio } from "./qwenSpeech
 import { openSpeechStream } from "./speechStream.mjs";
 import { planDrawingWithQwen } from "./drawingPlanner.mjs";
 import { attachRealtimeAsr, realtimeAsrConfig } from "./realtimeAsr.mjs";
+import { createProviderWarmup } from "./providerWarmup.mjs";
 import { routeOpenDrawing, generateOpenDrawing } from "./openDrawing.mjs";
 import { createTutorContext, tutorEnrichmentResult } from "../src/services/tutorContext.js";
 
@@ -205,7 +206,8 @@ async function handleRequest(request, response) {
   await servePublicFile(request, response, pathname);
 }
 
-attachRealtimeAsr(server);
+// Warm reply and speech connections while the child is still speaking (see providerWarmup.mjs).
+attachRealtimeAsr(server, { onSpeechActivity: createProviderWarmup() });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   server.listen(port, host, () => console.log(`小宇记 MVP is running at http://${host}:${port}`));

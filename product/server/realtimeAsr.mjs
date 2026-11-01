@@ -16,7 +16,10 @@ export function realtimeAsrConfig(env = process.env) {
 }
 
 // One browser connection is one utterance; only the server holds the provider key.
-export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect = (url, options) => new WebSocket(url, options) } = {}) {
+// onSpeechActivity fires when an utterance opens and when it finishes, so the caller can warm
+// connections for the reply and speech requests that follow. It must not throw or block.
+export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect = (url, options) => new WebSocket(url, options), onSpeechActivity = () => {} } = {}) {
+  const activity = () => { try { onSpeechActivity(); } catch { /* warming must never affect recognition */ } };
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 32768 });
   server.on("upgrade", (request, socket, head) => {
     let sameOrigin = false;
@@ -47,6 +50,7 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
     client.on("error", () => fail("client-error"));
     client.on("close", () => { done = true; close(); });
     if (!settings.enabled) { fail("disabled"); return; }
+    activity();
     try {
       upstream = connect(settings.endpoint, { headers: { Authorization: `Bearer ${settings.key}`, "OpenAI-Beta": "realtime=v1" }, handshakeTimeout: 5000, maxPayload: 65536 });
     } catch { fail("connect-failed"); return; }
@@ -91,6 +95,7 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
         try { event = JSON.parse(String(raw)); } catch { fail("invalid-request"); return; }
         if (event.type !== "finish" || !bytes) { fail("invalid-request"); return; }
         committed = true;
+        activity();
         deadline(5000);
         emit("input_audio_buffer.commit");
         emit("session.finish");
