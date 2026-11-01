@@ -83,6 +83,14 @@ test("speech start is reported once on open, never on finish, and a failing hook
   assert.equal(JSON.parse((await message)[0]).text, "天空为什么是蓝色的");
 });
 
+test("an unauthorized client cannot open a paid recognition connection", async t => {
+  const { origin, upstreams } = await fixture(t, { authorize: () => false });
+  const ws = new WebSocket(origin.replace("http", "ws") + "/api/asr/realtime", { origin });
+  const [, response] = await once(ws, "unexpected-response");
+  assert.equal(response.statusCode, 403);
+  assert.equal(upstreams.length, 0);
+});
+
 test("cancel disconnects upstream; a new utterance has no old audio or late result", async t => {
   const { client } = await fixture(t);
   const first = await client();

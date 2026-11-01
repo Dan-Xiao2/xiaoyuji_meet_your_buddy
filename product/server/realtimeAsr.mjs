@@ -19,13 +19,14 @@ export function realtimeAsrConfig(env = process.env) {
 // onSpeechStart fires when an utterance opens (the browser has already detected speech), so the
 // caller can warm connections for the reply and speech requests that follow. Not on finish: the
 // reply request follows too soon and would find warm sockets busy. It must not throw or block.
-export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect = (url, options) => new WebSocket(url, options), onSpeechStart = () => {} } = {}) {
+// authorize decides whether this client may open a (paid) recognition connection at all.
+export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect = (url, options) => new WebSocket(url, options), onSpeechStart = () => {}, authorize = () => true } = {}) {
   const speechStarted = () => { try { onSpeechStart(); } catch { /* warming must never affect recognition */ } };
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 32768 });
   server.on("upgrade", (request, socket, head) => {
     let sameOrigin = false;
     try { sameOrigin = new URL(request.headers.origin).host === request.headers.host; } catch { /* Missing/invalid origins are refused. */ }
-    if (request.url !== "/api/asr/realtime" || !sameOrigin || sockets.clients.size >= 4) {
+    if (request.url !== "/api/asr/realtime" || !sameOrigin || !authorize(request) || sockets.clients.size >= 4) {
       socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       return;
     }

@@ -35,3 +35,6 @@ playwright-report/
 
 # Generated LiveKit browser SDK bundle (npm run voice:build)
 src/voice-lab/client.bundle.js
+
+# Local HTTPS certificates and access code for the home-network pilot (npm run pilot:lan)
+.certs/

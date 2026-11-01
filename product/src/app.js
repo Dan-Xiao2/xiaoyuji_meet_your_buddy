@@ -20,6 +20,8 @@ import { deriveVoiceUiState, getVoiceStageLayout, shouldFinishVoiceOnRelease } f
 import { renderMemoryArchive, renderMemoryDashboard } from "./ui/memoryPanel.js";
 import { mountArchiveControls } from "./ui/archiveControls.js";
 import { mountMicrophoneSettings } from "./ui/microphoneSettings.js";
+import { createPilotLog } from "./services/pilotLog.js";
+import { bindPilotLogPanel } from "./ui/pilotLogPanel.js";
 import { REVISION_KEY } from "./services/localPersistence.js";
 import { getDurableArchiveStatus, subscribeDurableArchive } from "./services/indexedArchive.js";
 import { renderAdultSummary, renderParentTimeline } from "./ui/summary.js";
@@ -198,6 +200,10 @@ let hasLiveVoiceLevel = false;
 let voicePressStartedAt = 0;
 let voicePointerStopsExisting = false;
 const microphoneSettings = mountMicrophoneSettings({ beforeCapture: () => stopInteraction() });
+const pilotLog = (() => { try { return createPilotLog({ storage: window.sessionStorage }); } catch { return createPilotLog(); } })();
+bindPilotLogPanel(document.querySelector("#pilotSettings"), pilotLog, {
+  getContext: () => ({ userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } })
+});
 const voiceSession = createVoiceSession({
   voice, trace, onChange: requestVoiceRender,
   getContext: () => ({
@@ -1019,8 +1025,9 @@ function speakLatestTutorReply(replyMessageId = null) {
   });
 }
 
-function recordVoiceTiming({ stage, latencyMs, serverLatencyMs = 0 } = {}) {
+function recordVoiceTiming({ stage, latencyMs, serverLatencyMs = 0, reason, audioSeconds } = {}) {
   if (!stage || !Number.isFinite(Number(latencyMs))) return;
+  pilotLog.record({ stage, latencyMs, serverLatencyMs, reason, audioSeconds });
   recentVoiceTimings.push({ stage, latencyMs: Math.round(Number(latencyMs)), serverLatencyMs: Math.round(Number(serverLatencyMs || 0)), at: new Date().toISOString() });
   if (recentVoiceTimings.length > 80) recentVoiceTimings.shift();
   // Timing only: no transcript, identity, credentials or audio is retained.

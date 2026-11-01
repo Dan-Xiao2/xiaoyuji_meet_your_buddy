@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
+import { readFileSync } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { readFile } from "node:fs/promises";
@@ -13,6 +15,7 @@ import { planDrawingWithQwen } from "./drawingPlanner.mjs";
 import { attachRealtimeAsr, realtimeAsrConfig } from "./realtimeAsr.mjs";
 import { createProviderWarmup } from "./providerWarmup.mjs";
 import { installKeepAliveDispatcher } from "./httpKeepAlive.mjs";
+import { createLanAccess, pairPage } from "./lanAccess.mjs";
 import { routeOpenDrawing, generateOpenDrawing } from "./openDrawing.mjs";
 import { createTutorContext, tutorEnrichmentResult } from "../src/services/tutorContext.js";
 
@@ -49,7 +52,12 @@ const mime = {
 
 const voiceLab = createVoiceLab();
 let imageRequests = 0;
-export const server = createServer((request, response) => {
+// Home-network pilot mode: HTTPS (phone browsers allow the microphone only on secure pages) plus
+// a pairing code (see lanAccess.mjs). Both are required whenever the server listens beyond loopback.
+const tls = process.env.HTTPS_CERT && process.env.HTTPS_KEY
+  ? { cert: readFileSync(process.env.HTTPS_CERT), key: readFileSync(process.env.HTTPS_KEY) } : null;
+const lanAccess = process.env.LAN_ACCESS_CODE ? createLanAccess({ code: process.env.LAN_ACCESS_CODE }) : null;
+const handler = (request, response) => {
   handleRequest(request, response).catch((error) => {
     if (response.destroyed || response.headersSent) {
       if (!response.destroyed) response.destroy();
@@ -57,10 +65,23 @@ export const server = createServer((request, response) => {
     }
     sendRequestError(response, error);
   });
-});
+};
+export const server = tls ? createHttpsServer(tls, handler) : createServer(handler);
 
 async function handleRequest(request, response) {
   const pathname = requestUrl(request).pathname;
+
+  if (lanAccess) {
+    if (pathname === "/pair") return handlePair(request, response);
+    if (!lanAccess.authorized(request)) {
+      if (request.method === "GET" && !pathname.startsWith("/api/")) {
+        response.writeHead(303, { Location: "/pair", "Cache-Control": "no-store" });
+        response.end();
+        return;
+      }
+      throw new RequestError(403, "pairing-required");
+    }
+  }
 
   if (request.method === "POST" && pathname.startsWith("/api/") && !isSameOrigin(request)) {
     throw new RequestError(403, "forbidden");
@@ -209,10 +230,31 @@ async function handleRequest(request, response) {
 }
 
 // Warm reply and speech connections while the child is still speaking (see providerWarmup.mjs).
-attachRealtimeAsr(server, { onSpeechStart: createProviderWarmup() });
+attachRealtimeAsr(server, { onSpeechStart: createProviderWarmup(), authorize: request => !lanAccess || lanAccess.authorized(request) });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  server.listen(port, host, () => console.log(`小宇记 MVP is running at http://${host}:${port}`));
+  if (!["127.0.0.1", "::1", "localhost"].includes(host) && (!tls || !lanAccess)) {
+    console.error("Listening beyond this computer requires HTTPS_CERT, HTTPS_KEY and LAN_ACCESS_CODE (use npm run pilot:lan).");
+    process.exit(1);
+  }
+  server.listen(port, host, () => console.log(`小宇记 MVP is running at ${tls ? "https" : "http"}://${host}:${port}`));
+}
+
+async function handlePair(request, response) {
+  const send = (status, html, headers = {}) => {
+    response.writeHead(status, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...headers });
+    response.end(html);
+  };
+  if (request.method === "GET") return send(200, pairPage());
+  if (request.method !== "POST" || !isSameOrigin(request)) throw new RequestError(403, "forbidden");
+  let body = "";
+  for await (const chunk of request) {
+    body += chunk;
+    if (body.length > 1024) throw new RequestError(413, "request-too-large");
+  }
+  const result = lanAccess.pair(new URLSearchParams(body).get("code"));
+  if (result.ok) return send(303, "", { Location: "/", "Set-Cookie": result.cookie });
+  send(result.reason === "locked" ? 429 : 401, pairPage(result.reason === "locked" ? "尝试次数过多，请 10 分钟后再试。" : "访问码不对，请再看一下电脑上的显示。"));
 }
 
 function requestUrl(request) {
