@@ -52,6 +52,7 @@ export class Companion extends voice.Agent {
   }
   async generate(chatCtx, signal) {
       const startedAt = performance.now();
+      this.onTiming({ stage: 'llm-start', elapsedMs: 0 });
       const messages = chatCtx.items.filter(item => item.type === 'message' && ['user', 'assistant'].includes(item.role));
       const current = messages.at(-1);
       if (current?.role !== 'user' || !current.textContent?.trim()) return;
@@ -114,9 +115,10 @@ export class Companion extends voice.Agent {
       const inner = new AbortController();
       const requestSignal = AbortSignal.any([signal, inner.signal]);
       const requests = [];
-      let wake = null, finished = false, failure = null, announced = false;
+      let wake = null, finished = false, failure = null, announced = false, requested = false;
       const request = sentence => {
         if (!speakable(sentence) || requestSignal.aborted) return;
+        if (!requested) { requested = true; this.onTiming({ stage: 'tts-first-request', elapsedMs: elapsedSince(startedAt) }); }
         const audio = (async () => this.audio(sentence.trim(), requestSignal))();
         audio.catch(() => {}); // surfaced when its turn comes; never an unhandled rejection
         requests.push(audio);

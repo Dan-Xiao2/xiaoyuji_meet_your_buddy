@@ -12,7 +12,11 @@ function buttons() {
   node('send').disabled = !canSend;
   node('age').disabled = active || busy;
 }
+// Timing trace for latency checks: event type, stage and clock times only, never text or audio.
+const trace = window.voiceLabTrace = [];
 function event(event) {
+  trace.push({ type: event.type, stage: event.stage, state: event.state, interrupted: event.interrupted, at: event.at, receivedAt: Date.now() });
+  if (trace.length > 200) trace.shift();
   if (event.type === 'mode') provider = event.provider;
   if (event.type === 'stop-unconfirmed') {
     node('error').hidden = false; node('error').textContent = '本机音频已停止，远端结束尚未确认；请检查实验服务。';

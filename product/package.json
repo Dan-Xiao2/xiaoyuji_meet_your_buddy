@@ -23,10 +23,11 @@
     "check": "npm run check:skill && npm run check:architecture && npm run check:archive && npm run check:voice && npm run check:growth && npm run check:safety && npm run check:server && npm run check:whiteboard && npm run check:voice-lab && node server/smoke-test.mjs",
     "voice:build": "node scripts/build-voice-lab.mjs",
     "voice:lab": "node scripts/run-voice-lab.mjs",
-    "check:voice-lab": "node --test tests/voice-lab.test.mjs tests/voice-stream-reply.test.mjs tests/asr-onset-probe.test.mjs",
+    "check:voice-lab": "node --test tests/provider-warmup.test.mjs tests/voice-lab.test.mjs tests/voice-stream-reply.test.mjs tests/asr-onset-probe.test.mjs",
     "check:voice-lab:browser": "node scripts/check-livekit-loop.mjs",
     "voice:probe": "node scripts/probe-voice-lab-live.mjs",
-    "voice:probe-onset": "node scripts/probe-asr-onset.mjs"
+    "voice:probe-onset": "node scripts/probe-asr-onset.mjs",
+    "voice:probe-tts": "node scripts/probe-tts-first-frame.mjs"
   },
   "dependencies": {
     "@livekit/agents": "1.9.5",

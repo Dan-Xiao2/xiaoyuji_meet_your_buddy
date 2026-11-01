@@ -115,7 +115,7 @@ test('companion forwards model sentences as they arrive and reports the whole te
   const rest = []; for (;;) { const step = await iterator.next(); if (step.done) break; rest.push(step.value.delta.content); }
   assert.deepEqual(rest, ['它们离我们很远。']);
   assert.deepEqual(generated, [{ text: '星星自己会发光。它们离我们很远。', modelUsed: true }]);
-  assert.deepEqual(timings.map(item => item.stage), ['llm-first-sentence', 'llm-done']);
+  assert.deepEqual(timings.map(item => item.stage), ['llm-start', 'llm-first-sentence', 'llm-done']);
   assert.ok(timings.every(item => typeof item.elapsedMs === 'number'));
 });
 
@@ -166,7 +166,7 @@ test('speech is requested per sentence and the next sentence is prefetched', asy
   const second = reader.read(); releases[1]();
   assert.equal((await second).done, false);
   assert.equal((await reader.read()).done, true);
-  assert.deepEqual(timings.map(item => item.stage), ['tts-first-frame']);
+  assert.deepEqual(timings.map(item => item.stage), ['tts-first-request', 'tts-first-frame']);
 });
 
 test('a speech failure on a later sentence is reported and cancels the remaining requests', async () => {

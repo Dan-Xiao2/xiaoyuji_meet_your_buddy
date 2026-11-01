@@ -6,6 +6,7 @@ import { loadLocalEnv } from '../server/env.mjs';
 import { QwenSTT } from './qwenStt.mjs';
 import { Companion } from './companion.mjs';
 import { SyntheticSTT, syntheticReply, syntheticAudio } from './syntheticProviders.mjs';
+import { createProviderWarmup } from '../server/providerWarmup.mjs';
 
 loadLocalEnv(fileURLToPath(new URL('../', import.meta.url)));
 export default defineAgent({
@@ -18,12 +19,23 @@ export default defineAgent({
     // The synthetic provider has no recogniser that can prove audio arrived, so it is ready once started.
     // The real provider is ready only after its first audio frame has been appended to the recogniser.
     let inputReady = synthetic;
+    // Speech start warms a socket for the model request; the final transcript warms a second one
+    // for the first speech request, which starts while the model request still holds its socket.
+    const warmProvider = synthetic ? () => {} : createProviderWarmup();
     const readyState = () => ({ provider: synthetic ? 'synthetic' : 'qwen', state: session.agentState, inputReady });
+    // The SDK ignores interruptions AND discards microphone input for the first 3 s of the agent's
+    // first speech in a session (echo-cancellation warm-up). A child speaking then is not heard.
+    // Kept at the SDK default until real-device echo tests justify a shorter value.
+    const aecWarmupMs = process.env.VOICE_LAB_AEC_WARMUP_MS;
     const session = new voice.AgentSession({
+      ...(aecWarmupMs !== undefined && aecWarmupMs !== '' ? { aecWarmupDuration: Number(aecWarmupMs) || null } : {}),
       vad: ctx.proc.userData.vad,
       stt: synthetic ? new stt.StreamAdapter(new SyntheticSTT(), ctx.proc.userData.vad) : new QwenSTT({
         onInputReady: () => { if (inputReady) return; inputReady = true; if (started) publish('ready', readyState()); },
-        onDiagnostics: event => publish('timing', event)
+        onDiagnostics: event => {
+          if (event.stage === 'asr-speech-started' || event.stage === 'asr-transcript') void warmProvider();
+          publish('timing', event);
+        }
       }),
       turnHandling: { turnDetection: 'stt', endpointing: { minDelay: 0, maxDelay: 2000 },
         interruption: { enabled: true, mode: 'vad', minDuration: 400, minWords: 0, resumeFalseInterruption: false },
