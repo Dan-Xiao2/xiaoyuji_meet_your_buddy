@@ -39,7 +39,7 @@ description: 为“小宇记”0-6岁儿童成长陪伴产品生成和审查适�
 
 ### 2. 确定任务类型
 
-- **孩子对话或故事**：读 `references/companion-dialogue.md`。
+- **孩子对话、故事或学习回答方式**：读 `references/companion-dialogue.md`，其中“从阅读材料到回应策略”包含六条策略的适用条件、原创好坏对照、拒绝/更正及误用反例。保留自然话头，但明确拒绝优先。
 - **现实探索活动**：读 `references/offline-activities.md`。
 - **家长建议**：读 `references/parent-guidance.md`。
 - **成长瞬间或跨周观察**：读 `references/growth-observation.md`。
@@ -51,6 +51,8 @@ description: 为“小宇记”0-6岁儿童成长陪伴产品生成和审查适�
 机器可读的活动与对话种子位于 `references/knowledge-cards.json`。不要为了填满卡片字段而虚构观察。
 
 运行时不会把整本书或所有知识卡放进 Prompt。服务端先按年龄、说话人和意图选择最多 3 张卡，再把短摘要交给 Qwen；模型输出还要经过安全、长度、数量和证据检查。具体顺序见 `docs/knowledge-runtime.md`。
+
+学习回答方式时先提炼“情境、回应动作、不适用情况”，不要逐书增加Skill或把示例变成固定脚本。当前首批两条生成边界在 `server/turnGuidance.mjs` 中由完整、快速和流式Tutor共享：尊重明确拒绝，不虚构安慰依据。其他策略仍是设计/评测参考。改Skill、接通生成指令、真实模型遵从和语音听感是四种不同的完成状态，分别记录证据。
 
 ### 3. 检查证据
 

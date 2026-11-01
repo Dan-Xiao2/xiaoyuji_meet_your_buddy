@@ -1,3 +1,4 @@
+// 历史规划归档：用户当前独立开发和维护。此文件只重现2026-10-24旧多人方案，不作为当前人数、分工或排期依据。
 export const asOf = '2026-10-24';
 export const meetingDate = '2026-10-25';
 export const outputFolder = 'outputs/team-planning-01a02471-2026-10-24';

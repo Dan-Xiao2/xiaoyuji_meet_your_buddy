@@ -18,7 +18,7 @@
 
 ## 怎么打开
 
-1. 克隆团队仓库后，在 VS Code 打开 `xiaoyuji/product`。需要 Node.js 22（建议 22.13 或更新的 22.x）。团队操作见 [接手指南](docs/team/onboarding.md)。
+1. 克隆项目仓库后，在 VS Code 打开 `xiaoyuji_meet_your_buddy/product`。需要 Node.js 22（建议 22.13 或更新的 22.x）。当前由用户本人独立开发和维护，操作见 [独立开发指南](docs/team/onboarding.md)。
 
 2. 在 VS Code 终端里运行：
 
@@ -95,7 +95,7 @@ npm run architecture:build
 
 ## 接入 Qwen 文本 LLM
 
-复制 `.env.example` 为本机 `.env`（不要提交），再填写阿里云百炼的真实配置。团队模板默认关闭文本模型和云端 TTS；测试真实服务时显式开启 `TUTOR_ENABLE_LLM`、`USE_CLOUD_TTS` 并确认账号、区域、模型权限和费用。示例模型名不是账号可用性保证。图片保持关闭，直至单独批准：
+复制 `.env.example` 为本机 `.env`（不要提交），再填写阿里云百炼的真实配置。配置模板默认关闭文本模型和云端 TTS；测试真实服务时显式开启 `TUTOR_ENABLE_LLM`、`USE_CLOUD_TTS` 并确认账号、区域、模型权限和费用。示例模型名不是账号可用性保证。图片保持关闭，直至单独批准：
 
 ```bash
 LLM_PROVIDER=qwen

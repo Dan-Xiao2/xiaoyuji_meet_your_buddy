@@ -1,57 +1,48 @@
-# 团队接手指南
+# 独立开发与维护指南
 
-## 唯一入口
+## 当前方式
 
-团队仓库为 https://github.com/Dan-Xiao2/xiaoyuji 。当前产品源代码在 `product/`，根目录历史模板不是当前 App。原先开发目录和 AI_buddy 仓库仍保留，今后团队变更以本仓库 product 为准，避免双向手动同步。
+小宇记由用户本人独立开发和维护。产品、前端、后端、语音、内容、测试、账户与发布是同一人的工作范围，按优先级逐项完成；不按多人产能安排并行任务，不预设全职工时。旧多人规划保留为历史资料，不再作为执行依据。
 
-## 第一次运行
+## 本地运行
 
-1. 使用自己的 GitHub 账号接受邀请，开启双重验证；不要共用账号、密码或 token。
-2. 安装 Git 和 Node.js 22，克隆仓库，进入 `product/`。
-3. 执行 `npm ci`，再执行 `npm start`，打开 http://localhost:4173。
-4. 使用虚构昵称与数据检查页面。不要导入真实家庭档案作为开发夹具。
-5. 不配置密钥也可以运行本地规则。它不代表真实 AI 能力。需要模型测试时，复制 `.env.example` 为 `.env`，按账号实际区域和权限配置；先确认费用与调用范围。
+1. 使用本人GitHub账号和本地项目，进入 `product/`。安装 Git 和 Node.js 22。
+2. 执行 `npm ci`、`npm start`，打开 http://localhost:4173。
+3. 使用虚构数据验证，不导入真实家庭档案作为夹具。
+4. 需要真实服务时，在本机 `.env` 配置账号地域与模型权限；费用在已有授权总额内控制。不配置密钥只能验证本地规则和页面。
 
-`.env.example` 默认关闭文本 LLM、云端朗读与图片生成。ASR 需有效密钥，测试语音也会产生费用。不要把同事或孩子的声音当作无需同意的调试资料。远程手机访问麦克风通常需要 HTTPS 与授权；本机 localhost 成功不代表手机部署验收完成。
-
-## 第一次测试
-
-```bash
-npx playwright install chromium
-npm run check:release
-```
-
-Linux 可能需要 `npx playwright install --with-deps chromium`。以上检查不需要付费密钥，浏览器流程使用虚构数据和模拟接口。真实模型评测为独立、显式付费操作，先审批再运行；不要把 `eval:model` 当普通单元测试。
-
-## 找文件
-
-| 关注点 | 入口 |
-|---|---|
-| 产品原则和真实进度 | `docs/product-framework.md`、`docs/development-log.md` |
-| 页面和样式 | `index.html`、`src/ui/`、`src/styles/`、`DESIGN.md` |
-| 对话状态及协调 | `src/app.js`、`src/app/`、`src/features/conversation/` |
-| 麦克风和语音 | `src/services/voiceService.js`、`microphoneInput.js`、`server/qwenSpeech.mjs`、`server/realtimeAsr.mjs` |
-| 文本模型与知识卡 | `server/qwenTutor.mjs`、`knowledgeCardSelector.mjs`、`skills/xiaoyu-growth-companion/` |
-| 精确白板和开放图片 | `src/whiteboard/`、`src/features/drawing/`、`server/openDrawing.mjs` |
-| 本地档案和恢复 | `src/data/`、`src/services/indexedArchive.js`、`archiveIntegrity.js` |
-| 自动检查和评测 | `tests/`、`scripts/`、`benchmarks/`、仓库根 `.github/workflows/` |
+配置模板默认关闭付费文本、云端TTS和图片。真实ASR也会产生费用。iPhone麦克风、锁屏、网络切换需要独立真机验证；本机页面可用不能替代这些证据。
 
 ## 每次改动
 
-1. 从最新 main 创建自己的短期分支，例如 `fix/microphone-feedback`。
-2. 一次只认领一个有验收标准的任务。周末半天尚未换算成确定容量，不承诺未评估的日期。
-3. 提交改动和对应测试；涉及架构或产品边界时按 `AGENTS.md` 同步文档。
-4. 推送自己的分支并开 Pull Request，至少由另一人复核。不直接往 main 推未审查功能。
-5. PR 写明：改了什么、如何验证、失败/未测项、是否调用付费 API 或影响儿童数据。CI 通过不等于家庭体验验收通过。
-6. 团队周会选择一个主 Tracker（飞书或 Excel），不要维护两个可编辑版本。任务 ID 和验收证据写在 PR 中。
+1. 对照产品框架和开发日记，选一个有验收标准的小任务。
+2. 先查看当前未提交改动；需要隔离时使用短期分支，避免覆盖在途工作。
+3. 完成最小修改及必要检查，记录结果、失败与未测项。涉及产品或架构时按 `AGENTS.md` 同步文档。
+4. 提交前自己复查差异、密钥和数据范围；PR可用于保存审查记录，不要求虚构另一位开发者审批。
+5. 当前任务与证据以仓库内开发日记、优化计划和变更记录为准。按实际可投入时间重估下一步，不沿用旧周会或每人认领安排。
+6. 内容、儿童安全或发布要求确需独立/专业复核时按需安排，记录是否实际完成；自评不能冒充独立评审。
 
-## 数据与访问
+## 检查与文件入口
 
-- 密钥只留本机或受控部署环境；不经聊天截图、仓库、GitHub Issue 或录屏分享。需要撤销权限时同时撤销服务账号访问。
-- 原始书籍、家庭录音/照片、导出档案、浏览器个人存储和真实模型日志不进入 Git。
-- 当前没有生产级登录、家庭隔离和额度管理。不要把开发服务直接暴露公网，也不要把家长码当服务器身份认证。
-- 新同事先获得工作所需最低权限；不要默认给 Admin。管理员需确认仓库可见性、分支保护和退出后的访问撤销。
+```bash
+npm run check:release
+```
 
-## 尚需管理员完成
+完整发布检查包括模拟接口与虚构数据，不证明真实模型、儿童或iPhone体验达标。付费模型评测须显式运行，不作为日常单元测试；不用为文档小改动重复完整发布检查。
 
-GitHub 邀请、双重验证要求、main 分支保护及 required check（`Product release check / release-check`，以 GitHub 实际显示为准）尚需管理员确认。工作流存在不代表保护已经生效。免费/付费方案与仓库可见性可能影响可用设置。
+| 工作范围 | 入口 |
+|---|---|
+| 产品范围与当前进度 | `docs/product-framework.md`、`docs/development-log.md` |
+| 当前任务与优先级 | `docs/product-optimization-plan.md` |
+| 前端、会话与语音 | `src/ui/`、`src/features/`、`src/services/` |
+| 后端与模型 | `server/`、`voice-agent/` |
+| 内容与来源 | `skills/xiaoyu-growth-companion/`、`docs/knowledge-runtime.md` |
+| 档案与回归 | `src/data/`、`tests/`、`scripts/` |
+
+## 数据、账户与发布
+
+- 密钥只留本机或受控部署环境；原始书籍、家庭录音/照片与真实档案不进入Git。
+- 仓库、模型服务及部署账户由本人维护，不假设已有管理员或协作者代办。
+- 远程开放前核实家庭认证、隔离、额度与儿童数据处理边界；家长码不是服务器身份认证。
+- 分支保护、仓库可见性与发布检查需核实实际配置；文档更新不改变GitHub权限或代表已部署。
+- 后续若邀请短期专业支持，再按实际需要授予最小访问权限。

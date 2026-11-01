@@ -24,6 +24,8 @@ Qwen 返回 Tutor JSON
 
 ## 当前实现
 
+回应方式另有两条共享生成边界：尊重孩子明确拒绝，不虚构安慰依据。定义在 `server/turnGuidance.mjs`，由 `server/qwenTutor.mjs` 的完整、快速和流式快速生成入口共同注入；不扩大知识卡数量，不发送书籍示例全文。其他回应策略只供Skill设计/评测参考。指令接入不等于模型遵从，且本地安全/控制/白板提前返回路径不经过模型；见 [实施与验证边界](changes/2026-11-01-dialogue-response-patterns.md)。
+
 - 选择器：`server/knowledgeCardSelector.mjs`
 - Qwen 接入：`server/qwenTutor.mjs`
 - 自动测试：`server/smoke-test.mjs`
@@ -55,6 +57,8 @@ Qwen 返回 Tutor JSON
 通过检查后，`mergeLlmTurn` 仍会再次做白板、故事、活动、年龄长度和成长证据归一化。检查不是“相信模型”，而是把模型限制在产品已经定义的边界内。
 
 ## 如何扩充知识库
+
+2026-11-01 新增的六份儿童沟通漫画只进入内部书目评审及原创评测题，未进入运行时知识卡。逐本取舍、候选策略、现有选择器缺口和最小A/B流程见 [沟通材料使用方案](changes/2026-11-01-child-communication-materials.md)。新增评测题不等于新规则已生效或模型已训练。
 
 先增加来源登记，再新增一张小卡，不要直接把一本书变成一组 Prompt。每张卡都需要：
 

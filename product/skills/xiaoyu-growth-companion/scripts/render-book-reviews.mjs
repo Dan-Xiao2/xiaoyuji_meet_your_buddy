@@ -8,10 +8,10 @@ const reviews = JSON.parse(await readFile(path.join(referencesDir, "book-reviews
 const statusLabels = reviews.statusDefinitions;
 
 const lines = [
-  "# 20本育儿电子书逐本评审",
+  `# ${reviews.books.length}本育儿电子书逐本评审`,
   "",
   `> 第一轮初审：${reviews.reviewedAt}。本文件是内部研究记录，不是书籍全文摘要，也不是医学或教育评定。`,
-  "> 本轮根据文件元数据、主题相关性和已登记权威来源做保守评审；页码级正文复核、版本核验和版权核验仍需继续。",
+  "> 旧20本为元数据初审；2026-11-01新增6本为全页OCR阅读及重点页图像核对。以逐本记录为准，版本、版权及专业核验未完成。",
   "",
   "## 先看结论",
   "",
@@ -32,6 +32,10 @@ for (const [index, book] of reviews.books.entries()) {
   lines.push(`### ${index + 1}. ${book.title}`);
   lines.push("");
   lines.push(`- **本地文件**：\`${book.relativePath}\``);
+  if (book.sourceRootName) lines.push(`- **来源目录**：\`${book.sourceRootName}\``);
+  if (book.reviewedAt) lines.push(`- **本次评审**：${book.reviewedAt}；下次复核 ${book.nextReviewAt}；${book.reviewStage}`);
+  if (book.publisher) lines.push(`- **出版与授权**：${book.publisher}；年份/版次未核实；${book.licenseStatus}`);
+  if (book.pageEvidence) lines.push(`- **正文位置**：${book.pageEvidence}`);
   lines.push(`- **作者/版本线索**：${book.author}；${book.pages} 页`);
   lines.push(`- **决定**：${statusLabels[book.decision]}`);
   lines.push(`- **评审置信度**：${book.confidence}`);
@@ -39,6 +43,7 @@ for (const [index, book] of reviews.books.entries()) {
   lines.push(`- **明确不吸收**：${book.doNotAbsorb.join("；")}`);
   lines.push(`- **交叉核对来源**：${book.crossCheckSourceIds.join("、")}`);
   lines.push(`- **知识卡**：${book.cardIds.length ? book.cardIds.map((id) => `\`${id}\``).join("、") : "本轮不生成"}`);
+  if (book.evaluationScenarioIds) lines.push(`- **原创评测场景**：${book.evaluationScenarioIds.join("、")}`);
   lines.push(`- **备注**：${book.notes}`);
   lines.push("");
 }

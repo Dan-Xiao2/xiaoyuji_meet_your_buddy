@@ -1,16 +1,18 @@
 {
   "schemaVersion": "1.0",
   "reviewedAt": "2026-08-31",
+  "supplementedAt": "2026-11-01",
   "reviewStage": "第一轮逐本初审",
   "method": [
     "以本地文件的书名、作者、版本元数据和产品相关性建立逐本评审",
     "把可复用的低风险原则与 source-registry.json 中的中国官方指南、机构资料和开放教材交叉核对",
     "不把文件存在视为版权许可，不把书中观点视为医学、心理或发展诊断依据",
-    "页码级正文复核和版权核验仍需在后续精读中完成"
+    "页码级正文复核和版权核验仍需在后续精读中完成",
+    "2026-11-01追加LOCAL-COMM-001至006：173页本机OCR阅读、封面/重点页图像核对；旧20本未重新复核。新增6本仅内部研究或专业待审。"
   ],
   "statusDefinitions": {
     "runtime_via_cross_check": "书籍只作为内部线索；相关低风险原则已经由已登记权威来源支持，可以通过原创知识卡进入运行时",
-    "internal_only": "可帮助团队理解问题，但暂不直接驱动 Tutor 或孩子端内容",
+    "internal_only": "可帮助开发者理解问题，但暂不直接驱动 Tutor 或孩子端内容",
     "needs_professional_review": "涉及医学、睡眠、发育、身体教育或高度专业化判断，须由合资格专业人员和当前指南复核",
     "version_merge": "同一主题存在多版或重复文件，先保留一份作为复核对象，避免重复和版本冲突"
   },
@@ -414,6 +416,240 @@
       "cardIds": ["responsive-back-and-forth", "story-to-real-world"],
       "crossCheckSourceIds": ["CN-MOE-ELDG-3-6-2012", "CN-UNICEF-POSITIVE-PARENTING", "OER-COC-ECE-CURRICULUM-2018"],
       "notes": "适合转化为‘说完就去做/找/画’的低屏幕语言活动。"
+    },
+    {
+      "bookId": "LOCAL-COMM-001",
+      "title": "小恐龙大情绪：不责怪自己",
+      "author": "斯瓦普娜·哈多 文；李忆婷 图；肖赛格 译",
+      "publisher": "陕西师范大学出版总社",
+      "edition": null,
+      "publishedAt": null,
+      "relativePath": "小恐龙大情绪儿童反内耗漫画(1).pdf",
+      "sourceRootName": "小宇记-小孩沟通",
+      "pages": 29,
+      "sha256": "7b45263fa49c7798c6721ff7ca8de37d4a8a2e2b6d24dd0c03272f7e514a9beb",
+      "decision": "internal_only",
+      "confidence": "medium",
+      "reviewedAt": "2026-11-01",
+      "nextReviewAt": "2027-05-01",
+      "reviewStage": "全页OCR阅读及重点页图像核对，非专业审核",
+      "licenseStatus": "商业使用、改编和训练授权未核实；仅保留原创内部评审",
+      "absorb": [
+        "被不友善对待时先听具体遭遇；感受可以存在，伤人的行为仍需边界",
+        "对自然的关心可以成为提问入口，先回应问题再决定是否延伸"
+      ],
+      "doNotAbsorb": [
+        "不要求孩子原谅或立即停止愤怒，不把被欺负归因于不够宽容",
+        "不沿用植物喜欢音乐的拟人化因果，也不从漫画建立植物感知的科学结论"
+      ],
+      "cardIds": [],
+      "relatedExistingCardIds": [
+        "friend-perspective"
+      ],
+      "crossCheckSourceIds": [
+        "CN-UNICEF-POSITIVE-PARENTING"
+      ],
+      "pageEvidence": "PDF 7–16：受不友善对待；17–26：关心植物；27–28：亲子说明；29：5岁以上与套装ISBN线索。",
+      "evaluationScenarioIds": [
+        "comm-boundary",
+        "comm-science-control"
+      ],
+      "notes": "只进入资料评审和原创评测线索，不进入运行时提示词、向量库或微调数据。出版年份/版次缺失；OCR部分文字遮挡或识别不清，不当逐字校勘。交叉核对仅为一般沟通原则，不证明书中特定疗法或科学说法。"
+    },
+    {
+      "bookId": "LOCAL-COMM-002",
+      "title": "小恐龙大情绪：不过分纠结",
+      "author": "斯瓦普娜·哈多 文；李忆婷 图；肖赛格 译",
+      "publisher": "陕西师范大学出版总社",
+      "edition": null,
+      "publishedAt": null,
+      "relativePath": "小恐龙大情绪儿童反内耗漫画.pdf",
+      "sourceRootName": "小宇记-小孩沟通",
+      "pages": 29,
+      "sha256": "7e3df29f66f8489c9481163195de72152a346f61b0d13fdf83629ef3feaf1ec0",
+      "decision": "internal_only",
+      "confidence": "medium",
+      "reviewedAt": "2026-11-01",
+      "nextReviewAt": "2027-05-01",
+      "reviewStage": "全页OCR阅读及重点页图像核对，非专业审核",
+      "licenseStatus": "商业使用、改编和训练授权未核实；仅保留原创内部评审",
+      "absorb": [
+        "区分感谢他人的心意与表达自己的实际需要",
+        "对方的喜好和感受需要确认，不能从自己的喜好推断"
+      ],
+      "doNotAbsorb": [
+        "不把身体不适归因于撒谎或负罪感；不鼓励忍受不舒服来保护成人心情",
+        "不承诺诚实一定不会惹麻烦；安全披露优先于维持关系"
+      ],
+      "cardIds": [],
+      "relatedExistingCardIds": [
+        "friend-perspective"
+      ],
+      "crossCheckSourceIds": [
+        "CN-UNICEF-POSITIVE-PARENTING"
+      ],
+      "pageEvidence": "PDF 7–16：诚实与照顾感受，12/16有需排除的归因和保证；17–26：交友与不同喜好。",
+      "evaluationScenarioIds": [
+        "comm-honest-need",
+        "comm-peer-choice"
+      ],
+      "notes": "只进入资料评审和原创评测线索，不进入运行时提示词、向量库或微调数据。出版年份/版次缺失；OCR部分文字遮挡或识别不清，不当逐字校勘。交叉核对仅为一般沟通原则，不证明书中特定疗法或科学说法。"
+    },
+    {
+      "bookId": "LOCAL-COMM-003",
+      "title": "小恐龙大情绪：建立安全感",
+      "author": "斯瓦普娜·哈多 文；李忆婷 图；肖赛格 译",
+      "publisher": "陕西师范大学出版总社",
+      "edition": null,
+      "publishedAt": null,
+      "relativePath": "建立安全感.pdf",
+      "sourceRootName": "小宇记-小孩沟通",
+      "pages": 29,
+      "sha256": "ecc650d595bf609d29e31012ab9a4da625bc6560ba9a90719e611b964ef39888",
+      "decision": "needs_professional_review",
+      "confidence": "medium",
+      "reviewedAt": "2026-11-01",
+      "nextReviewAt": "2027-05-01",
+      "reviewStage": "全页OCR阅读及重点页图像核对，非专业审核",
+      "licenseStatus": "商业使用、改编和训练授权未核实；仅保留原创内部评审",
+      "absorb": [
+        "失去后的感受不必保持一致；允许沉默和随时停止",
+        "支持联系现实中可信任的成人，不让AI替代家庭支持"
+      ],
+      "doNotAbsorb": [
+        "不承诺一定安全、永远记得或很快恢复；不把所有反应一概正常化",
+        "不把呼吸练习当成治疗或必要步骤，不自行解释哀伤阶段和创伤"
+      ],
+      "cardIds": [],
+      "relatedExistingCardIds": [
+        "name-and-accept-emotion"
+      ],
+      "crossCheckSourceIds": [
+        "CN-UNICEF-POSITIVE-PARENTING"
+      ],
+      "pageEvidence": "PDF 7–16：丧亲；17–26：灾后失去与支持；19催促积极看待，23/26的泛化与练习需谨慎；27–28为亲子说明。",
+      "evaluationScenarioIds": [
+        "comm-loss",
+        "comm-fear-stop"
+      ],
+      "notes": "只进入资料评审和原创评测线索，不进入运行时提示词、向量库或微调数据。出版年份/版次缺失；OCR部分文字遮挡或识别不清，不当逐字校勘。交叉核对仅为一般沟通原则，不证明书中特定疗法或科学说法。"
+    },
+    {
+      "bookId": "LOCAL-COMM-004",
+      "title": "小恐龙大情绪：拒绝自我怀疑",
+      "author": "斯瓦普娜·哈多 文；李忆婷 图；肖赛格 译",
+      "publisher": "陕西师范大学出版总社",
+      "edition": null,
+      "publishedAt": null,
+      "relativePath": "拒绝自我怀疑.pdf",
+      "sourceRootName": "小宇记-小孩沟通",
+      "pages": 30,
+      "sha256": "70fa1c2bfd8a0be7f3d8bd19ae5311f3abf6bf846f58327bd33b76cb3bc5afe4",
+      "decision": "internal_only",
+      "confidence": "medium",
+      "reviewedAt": "2026-11-01",
+      "nextReviewAt": "2027-05-01",
+      "reviewStage": "全页OCR阅读及重点页图像核对，非专业审核",
+      "licenseStatus": "商业使用、改编和训练授权未核实；仅保留原创内部评审",
+      "absorb": [
+        "差异不等于较差；不需要先证明获奖或有用才值得被尊重",
+        "解释具体规则服务的安全或协作目的，容许表达异议"
+      ],
+      "doNotAbsorb": [
+        "不把自我价值建立在特殊才能、奖励或优于别人之上",
+        "不教孩子自行试探危险，不把让成人不生气作为服从理由"
+      ],
+      "cardIds": [],
+      "relatedExistingCardIds": [
+        "cooperative-problem-solving"
+      ],
+      "crossCheckSourceIds": [
+        "CN-UNICEF-POSITIVE-PARENTING"
+      ],
+      "pageEvidence": "PDF 8–17：差异与自我评价，13–15依赖表现/奖励；18–27：规则；28–29：亲子说明。第1/2页为相似封面，保留原文件。",
+      "evaluationScenarioIds": [
+        "comm-difference",
+        "comm-rule"
+      ],
+      "notes": "只进入资料评审和原创评测线索，不进入运行时提示词、向量库或微调数据。出版年份/版次缺失；OCR部分文字遮挡或识别不清，不当逐字校勘。交叉核对仅为一般沟通原则，不证明书中特定疗法或科学说法。"
+    },
+    {
+      "bookId": "LOCAL-COMM-005",
+      "title": "小恐龙大情绪：没什么好攀比",
+      "author": "斯瓦普娜·哈多 文；李忆婷 图；肖赛格 译",
+      "publisher": "陕西师范大学出版总社",
+      "edition": null,
+      "publishedAt": null,
+      "relativePath": "没什么好攀比.pdf",
+      "sourceRootName": "小宇记-小孩沟通",
+      "pages": 28,
+      "sha256": "2c6c91c8a3ad467718c82347d6701bab59374bcb5213246778da4a438bcb1b88",
+      "decision": "internal_only",
+      "confidence": "medium",
+      "reviewedAt": "2026-11-01",
+      "nextReviewAt": "2027-05-01",
+      "reviewStage": "全页OCR阅读及重点页图像核对，非专业审核",
+      "licenseStatus": "商业使用、改编和训练授权未核实；仅保留原创内部评审",
+      "absorb": [
+        "区分数量相同与需要不同，但先询问实际分配情境",
+        "允许羡慕，把关注点放回孩子的真实需要，不用排名评价孩子"
+      ],
+      "doNotAbsorb": [
+        "不靠别人更少、残障或不幸来安慰孩子；不推断家庭经济情况",
+        "不把物品比较改成能力比较；不让孩子独自建设公共设施"
+      ],
+      "cardIds": [],
+      "relatedExistingCardIds": [
+        "cooperative-problem-solving"
+      ],
+      "crossCheckSourceIds": [
+        "CN-UNICEF-POSITIVE-PARENTING"
+      ],
+      "pageEvidence": "PDF 7–16：分配与需要；17–26：物品比较；24的无障碍设施建议不能直接用于幼儿；27–28为亲子说明。文件未含封底/完整版权页。",
+      "evaluationScenarioIds": [
+        "comm-comparison",
+        "comm-fairness"
+      ],
+      "notes": "只进入资料评审和原创评测线索，不进入运行时提示词、向量库或微调数据。出版年份/版次缺失；OCR部分文字遮挡或识别不清，不当逐字校勘。交叉核对仅为一般沟通原则，不证明书中特定疗法或科学说法。"
+    },
+    {
+      "bookId": "LOCAL-COMM-006",
+      "title": "小恐龙大情绪：自信交往",
+      "author": "斯瓦普娜·哈多 文；李忆婷 图；闵浩然 译",
+      "publisher": "陕西人民教育出版社",
+      "edition": null,
+      "publishedAt": null,
+      "relativePath": "自信交往.pdf",
+      "sourceRootName": "小宇记-小孩沟通",
+      "pages": 28,
+      "sha256": "d4a9544624006b4c080c3820a76e0a20b1a79d2c8c0a3349cccd3c5145bb44c7",
+      "decision": "internal_only",
+      "confidence": "medium",
+      "reviewedAt": "2026-11-01",
+      "nextReviewAt": "2027-05-01",
+      "reviewStage": "全页OCR阅读及重点页图像核对，非专业审核",
+      "licenseStatus": "商业使用、改编和训练授权未核实；仅保留原创内部评审",
+      "absorb": [
+        "交往可以从一个自愿的小动作开始，也允许先观察",
+        "回应外貌困扰时不评价外貌高低，不把愿不愿意社交当成固定人格"
+      ],
+      "doNotAbsorb": [
+        "不把安静、少看眼睛直接识别为孤独或低自尊",
+        "不要求微笑、眼神接触、反复练习至消除害羞；不暗示身体必须能看能听能跑才值得尊重"
+      ],
+      "cardIds": [],
+      "relatedExistingCardIds": [
+        "friend-perspective"
+      ],
+      "crossCheckSourceIds": [
+        "CN-UNICEF-POSITIVE-PARENTING"
+      ],
+      "pageEvidence": "PDF 7–16：新环境交往；17–26：身体形象；27–28将害羞泛化为低自我评价，需排除。文件未含封底/完整版权页。",
+      "evaluationScenarioIds": [
+        "comm-social-pace",
+        "comm-body-respect"
+      ],
+      "notes": "只进入资料评审和原创评测线索，不进入运行时提示词、向量库或微调数据。出版年份/版次缺失；OCR部分文字遮挡或识别不清，不当逐字校勘。交叉核对仅为一般沟通原则，不证明书中特定疗法或科学说法。"
     }
   ]
 }

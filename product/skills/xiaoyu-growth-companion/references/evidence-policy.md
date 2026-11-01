@@ -17,7 +17,7 @@
 
 - `adapt_with_attribution`：可在许可证范围内改写和改编，保留作者、标题、许可与链接。
 - `summarize_and_cite_only`：只写原创摘要、产品规则和短小事实，不复制段落、表格、插图、案例或练习题。
-- `internal_research_only_no_commercial_derivative`：只供团队理解和交叉核对，不进入面向用户的知识包，也不作为商业产品内容模板。
+- `internal_research_only_no_commercial_derivative`：只供内部研究理解和交叉核对，不进入面向用户的知识包，也不作为商业产品内容模板。
 - `historical_context_only`：只用于理解思想史，不生成现代医学、心理或发展结论。
 
 禁止把整本电子书、扫描版、盗版网盘文件或未经许可的翻译全文放进仓库、向量库、提示词或模型微调集。

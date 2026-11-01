@@ -1,25 +1,28 @@
-# 小宇记 · 团队开发仓库
+# 小宇记 · 独立开发项目
 
 **一起探索小宇宙，一起记住小时候。**
 
 当前儿童语音探索 App 在 **[`product/`](product/README.md)**。先服务中国大陆 3–6 岁家庭；目前是工程原型，不是已上线或已验证效果的儿童产品。
 
-## 新成员从这里开始
+当前由用户本人独立开发和维护，按实际投入顺序实施与验证，不按多人产能排期。
+
+## 本地开发入口
 
 ```bash
-git clone https://github.com/Dan-Xiao2/xiaoyuji.git
-cd xiaoyuji/product
+git clone https://github.com/Dan-Xiao2/xiaoyuji_meet_your_buddy.git
+cd xiaoyuji_meet_your_buddy/product
 npm ci
 npm start
 ```
 
 需要 Node.js 22（建议 22.13 或更新的 22.x）。打开 http://localhost:4173；如果端口被占用，先停止旧服务或在本机 `.env` 修改 `PORT`。无密钥时只能验证本地规则与页面，不能验证真实模型或云端语音质量。
 
-- 接手与分支协作：[团队接手指南](product/docs/team/onboarding.md)
-- 当前实现与开放项：[接手基线](product/docs/team/baseline-2026-10-25.md)
+- 开发与验证：[独立开发指南](product/docs/team/onboarding.md)
+- 历史导入记录：[接手基线](product/docs/team/baseline-2026-10-25.md)
 - 产品原则：[产品框架](product/docs/product-framework.md)
 - 实际进度：[开发日记](product/docs/development-log.md)
-- 会议和任务认领：[团队计划](product/docs/team/2026-10-24-project-plan/会议与执行说明.md)
+- 当前任务顺序：[优化计划](product/docs/product-optimization-plan.md)
+- 旧多人安排：[历史规划，已被单人开发决定取代](product/docs/team/2026-10-24-project-plan/会议与执行说明.md)
 
 **注意：根目录的 `package.json`、`app/`、`db/`、`worker/` 等属于以前的 vinext/Sites 模板，保留作历史参考，不是当前 App。所有 App 安装、运行和测试命令都在 `product/` 执行。** 两套实现尚未整合，不要同时修改或部署。
 

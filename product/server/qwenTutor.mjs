@@ -9,6 +9,8 @@ import { guardDrawingReply } from "./drawingReplyGuard.mjs";
 import { isLessonAnswer, isInteractionControl, conversationControlReply, explorationInstruction } from "../src/services/conversationIntent.js";
 import { scienceInstruction, guardScienceReply } from "./scienceContext.mjs";
 
+import { turnGuidance, responseBoundaryInstruction } from "./turnGuidance.mjs";
+
 const DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 
 export async function createTutorTurnWithQwen(input, currentState, { signal, spokenReply } = {}) {
@@ -362,7 +364,9 @@ function buildQuickReplyBody(input, currentState, knowledge, { stream = false } 
           "孩子明确要求故事时才讲一个很短的开头；普通为什么问题先直接解释。",
           spokenStyleInstruction,
           followChildInstruction,
-          createKnowledgeContext(knowledge)
+          speaker.role === "child" && process.env.QUICK_TURN_GUIDANCE !== "false" ? turnGuidance(input, currentState.messages || []) : "",
+          createKnowledgeContext(knowledge),
+          responseBoundaryInstruction
         ].join("\n")
       },
       {
@@ -469,6 +473,7 @@ function createSystemPrompt(ageBand = "4-5", knowledgeContext = "") {
     "回复孩子时要短、温暖、口语化。回复成人时同样简洁，并先确认对方提供的是家人观察，不是孩子原话。",
     `当前年龄段是 ${ageBand} 岁。年龄表达规则：${getAgeInstruction(ageBand)}`,
     knowledgeContext,
+    responseBoundaryInstruction,
     "必须直接回应 speakerInput 里的真实问题。不要因为最近对话或示例，把问题改成另一个主题。",
     "如果孩子问“为什么/怎么回事”，优先解释这个现象；如果孩子明确说想听故事，才讲故事。",
     "不要索要儿童真实姓名、住址、学校、电话、照片等敏感信息。",

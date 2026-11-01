@@ -1,6 +1,13 @@
 {
   "schemaVersion": "1.0",
   "reviewedAt": "2026-08-24",
+  "internalReviewRegistry": {
+    "catalog": "local-parenting-book-catalog.json",
+    "reviews": "book-reviews.json",
+    "latestBatch": "LOCAL-COMM-001 through LOCAL-COMM-006",
+    "reviewedAt": "2026-11-01",
+    "notes": "六份本地商业漫画的来源、文件指纹、页码、授权状态及复核日期登记在上述内部书目。未加入下方运行时支持来源，不能作为知识卡sourceIds。"
+  },
   "sources": [
     {
       "id": "UNICEF-SAFER-CHATBOTS",

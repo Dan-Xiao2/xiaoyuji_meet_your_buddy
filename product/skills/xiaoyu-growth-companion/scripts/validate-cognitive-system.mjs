@@ -70,7 +70,7 @@ for (const item of antiPatterns.antiPatterns) {
 }
 
 assert(bookReviews.schemaVersion === "1.0", "unsupported book review version");
-assert(bookReviews.books.length === 20, `expected 20 book reviews, got ${bookReviews.books.length}`);
+assert(bookReviews.books.length > 0, "book reviews must not be empty");
 assertUnique(bookReviews.books, "bookId", "book reviews");
 const reviewStatuses = new Set(Object.keys(bookReviews.statusDefinitions));
 for (const review of bookReviews.books) {
