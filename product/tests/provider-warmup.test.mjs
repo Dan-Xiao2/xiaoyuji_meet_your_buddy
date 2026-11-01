@@ -49,3 +49,4 @@ test('warm-up never throws and is skipped when disabled or unconfigured', async 
   assert.equal(await createProviderWarmup({ env: {}, fetchImpl: async () => { count++; } })(), false);
   assert.equal(count, 1);
 });
+

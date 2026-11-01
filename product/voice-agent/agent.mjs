@@ -7,8 +7,10 @@ import { QwenSTT } from './qwenStt.mjs';
 import { Companion } from './companion.mjs';
 import { SyntheticSTT, syntheticReply, syntheticAudio } from './syntheticProviders.mjs';
 import { createProviderWarmup } from '../server/providerWarmup.mjs';
+import { installKeepAliveDispatcher } from '../server/httpKeepAlive.mjs';
 
 loadLocalEnv(fileURLToPath(new URL('../', import.meta.url)));
+installKeepAliveDispatcher();
 export default defineAgent({
   prewarm: async proc => { proc.userData.vad = await VAD.load({ forceCPU: true, minSilenceDuration: 650 }); },
   entry: async ctx => {
@@ -20,8 +22,8 @@ export default defineAgent({
     // to the recogniser AFTER it proves the microphone reaches us (again, after a reconnect). The
     // synthetic provider has no recogniser that can prove this, so it answers once started.
     let pendingHello = null;
-    // Speech start warms a socket for the model request; the final transcript warms a second one
-    // for the first speech request, which starts while the model request still holds its socket.
+    // Speech start warms two sockets: one for the model request, one for the first speech request
+    // that starts while the model still streams. Not at the final transcript (see providerWarmup.mjs).
     const warmProvider = synthetic ? () => {} : createProviderWarmup();
     const readyState = (helloId, inputReady) => ({ provider: synthetic ? 'synthetic' : 'qwen', state: session.agentState, helloId, inputReady });
     const prove = () => {
@@ -40,7 +42,7 @@ export default defineAgent({
       stt: synthetic ? new stt.StreamAdapter(new SyntheticSTT(), ctx.proc.userData.vad) : new QwenSTT({
         onAppend: prove,
         onDiagnostics: event => {
-          if (event.stage === 'asr-speech-started' || event.stage === 'asr-transcript') void warmProvider();
+          if (event.stage === 'asr-speech-started') void warmProvider();
           publish('timing', event);
         }
       }),

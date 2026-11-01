@@ -70,15 +70,14 @@ test("streams PCM before finish and returns a single final, never partial guesse
   assert.equal(upstream.readyState, 3);
 });
 
-test("speech activity is reported on open and finish, and a failing hook never breaks recognition", async t => {
+test("speech start is reported once on open, never on finish, and a failing hook never breaks recognition", async t => {
   let calls = 0;
-  const { client } = await fixture(t, { onSpeechActivity: () => { calls++; throw new Error("warm-up failed"); } });
+  const { client } = await fixture(t, { onSpeechStart: () => { calls++; throw new Error("warm-up failed"); } });
   const { ws, upstream } = await client();
   assert.equal(calls, 1);
   ws.send(Buffer.from([0, 0, 1, 0])); await tick();
-  assert.equal(calls, 1, "audio frames are not activity events");
   ws.send(JSON.stringify({ type: "finish" })); await tick();
-  assert.equal(calls, 2);
+  assert.equal(calls, 1, "warming at finish would occupy the sockets the reply request needs next");
   const message = once(ws, "message");
   upstream.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: "天空为什么是蓝色的" }));
   assert.equal(JSON.parse((await message)[0]).text, "天空为什么是蓝色的");

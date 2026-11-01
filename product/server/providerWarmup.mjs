@@ -1,11 +1,15 @@
-// Node's fetch drops idle keep-alive sockets after about 4 s, so after a child has been speaking,
-// each turn's model and speech requests would open new TCP+TLS connections (measured ~0.9 s extra
-// to the Beijing endpoint). Free, authenticated model-list requests just before they are needed
-// leave warm sockets in the same connection pool. They never send child text or audio.
+// With httpKeepAlive.mjs installed, provider sockets survive ordinary pauses between turns. The
+// first turn, and a turn after a long pause, still start cold (~0.5–0.9 s per new TCP+TLS
+// connection to the Beijing endpoint). Free, authenticated model-list requests sent when the
+// child STARTS speaking open warm sockets in time. They never send child text or audio.
 //
 // `sockets` requests are sent concurrently, because one warm-up done after another just reuses
 // the same socket. A turn needs two at once: the reply request, and then the speech request
 // that starts while the background enrichment (or a still-streaming reply) holds the first.
+//
+// Never warm right before a reply request (for example at the final transcript): the reply,
+// sent a few ms later, finds every warm socket busy with warm-up requests and opens a new
+// connection (measured: first sentence 1.1–1.5 s instead of ~0.57 s).
 export function createProviderWarmup({ fetchImpl = (...args) => fetch(...args), env = process.env, timeoutMs = 3000, sockets = 2 } = {}) {
   let inFlight = null;
   const url = env.QWEN_BASE_URL && env.QWEN_API_KEY ? `${env.QWEN_BASE_URL.replace(/\/$/, '')}/models` : null;
@@ -28,3 +32,4 @@ export function createProviderWarmup({ fetchImpl = (...args) => fetch(...args), 
     return inFlight;
   };
 }
+

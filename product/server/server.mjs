@@ -12,11 +12,13 @@ import { openSpeechStream } from "./speechStream.mjs";
 import { planDrawingWithQwen } from "./drawingPlanner.mjs";
 import { attachRealtimeAsr, realtimeAsrConfig } from "./realtimeAsr.mjs";
 import { createProviderWarmup } from "./providerWarmup.mjs";
+import { installKeepAliveDispatcher } from "./httpKeepAlive.mjs";
 import { routeOpenDrawing, generateOpenDrawing } from "./openDrawing.mjs";
 import { createTutorContext, tutorEnrichmentResult } from "../src/services/tutorContext.js";
 
 const root = normalize(join(fileURLToPath(new URL(".", import.meta.url)), ".."));
 loadLocalEnv(root);
+installKeepAliveDispatcher();
 
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
@@ -207,7 +209,7 @@ async function handleRequest(request, response) {
 }
 
 // Warm reply and speech connections while the child is still speaking (see providerWarmup.mjs).
-attachRealtimeAsr(server, { onSpeechActivity: createProviderWarmup() });
+attachRealtimeAsr(server, { onSpeechStart: createProviderWarmup() });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   server.listen(port, host, () => console.log(`小宇记 MVP is running at http://${host}:${port}`));
