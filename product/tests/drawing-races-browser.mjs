@@ -1,3 +1,4 @@
+import { waitForConversationPhase } from "./helpers/runtimeDiagnostics.mjs";
 import assert from "node:assert/strict";
 import { createInitialState } from "../src/data/studentModel.js";
 import { createInitialFamily, addFamilyMember } from "../src/data/familyModel.js";
@@ -108,7 +109,7 @@ try {
       await f.page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).profile.name === "绘画等待时的新昵称", key);
       await f.page.selectOption("#activeSpeaker", f.caregiver.id);
       f.gates[stage].resolve(); await f.waitTurns(1);
-      if (mode === "chat") await f.page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).llmStatus.stage === "complete", key);
+      if (mode === "chat") await waitForConversationPhase(f.page, "complete");
       const saved = await f.read();
       assert.equal(saved.profile.name, "绘画等待时的新昵称");
       assert.equal(saved.family.activeSpeakerId, f.caregiver.id);

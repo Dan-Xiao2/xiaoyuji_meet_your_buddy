@@ -11,21 +11,24 @@ function state() {
 }
 
 async function completed(enriched = { memory: { interests: ["画画"] } }, reply = "好的") {
-  let live = state();
+  const local = state();
+  let live = { ...local, messages: local.messages.slice(0, -2) };
   const controller = createConversationController({
     quickApi: async () => ({ reply, llmStatus: { used: true } }), enrichmentApi: async () => enriched
   });
   let quickCommit;
-  const outcome = await controller.run({ turn: controller.begin(), input: "聊聊今天", localTurn: live,
-    stateForRequest: live, getState: () => live, onPending: next => { live = next; },
+  const turn = controller.begin();
+  const accept = (current, commit) => controller.accept(turn, current, commit);
+  const outcome = await controller.run({ turn, input: "聊聊今天", localTurn: local,
+    stateForRequest: live, getState: () => live, onPending: commit => { live = accept(live, commit).state; return live; },
     onQuickReply: commit => {
       quickCommit = commit;
-      const applied = applyConversationCommit(live, commit);
+      const applied = accept(live, commit);
       assert.equal(applied.accepted, true);
       live = applied.state;
       return live;
     } });
-  return { live, outcome, quickCommit };
+  return { live, outcome, quickCommit, accept, controller, turn };
 }
 
 test("controller publishes bounded asynchronous commits instead of application state", async () => {
@@ -51,22 +54,23 @@ test("changes after controller completion survive consumption, including evidenc
 });
 
 test("replaying a completed submission is rejected before save or other side effects", async () => {
-  const { live, outcome } = await completed();
-  const first = applyConversationCommit(live, outcome.commit);
-  const again = applyConversationCommit(first.state, outcome.commit);
+  const { live, outcome, accept } = await completed();
+  const first = accept(live, outcome.commit);
+  const again = accept(first.state, outcome.commit);
   assert.equal(first.accepted, true);
   assert.equal(again.accepted, false);
   assert.equal(again.state, first.state);
 });
 
-for (const change of ["end", "session", "message", "phase"]) {
+for (const change of ["end", "session", "message", "cancel", "new-turn"]) {
   test(`commit consumption rejects ${change} changes after completion`, async () => {
-    const { live, outcome } = await completed();
+    const { live, outcome, accept, controller } = await completed();
     if (change === "end") live.session = { ...live.session, status: "ended" };
     if (change === "session") live.session = { ...live.session, id: "new-session" };
     if (change === "message") live.messages = live.messages.slice(0, -1);
-    if (change === "phase") live.llmStatus = { stage: "another-turn" };
-    assert.equal(applyConversationCommit(live, outcome.commit).accepted, false);
+    if (change === "cancel") controller.cancel();
+    if (change === "new-turn") controller.begin();
+    assert.equal(accept(live, outcome.commit).accepted, false);
   });
 }
 
@@ -81,34 +85,45 @@ test("unknown fields in a submission cannot replace application-owned fields", a
 });
 
 test("protected output is applied to current family and cannot be replayed", async () => {
-  const { live, outcome } = await completed(null, "告诉我你的家庭地址。");
+  const { live, outcome, accept } = await completed(null, "告诉我你的家庭地址。");
   const latest = { ...live, profile: { name: "新昵称" } };
-  const first = applyConversationCommit(latest, outcome.commit);
+  const first = accept(latest, outcome.commit);
   assert.equal(first.accepted, true);
   assert.equal(first.state.profile, latest.profile);
   assert.equal(first.state.messages.length, 1);
   assert.equal(first.state.messages[0].safetyProtected, true);
-  assert.equal(applyConversationCommit(first.state, outcome.commit).accepted, false);
+  assert.equal(first.state.llmStatus.message, undefined);
+  assert.equal(accept(first.state, outcome.commit).accepted, false);
 });
 
-test("quick commit can be consumed only once even when reply text stays the same", () => {
+test("quick commit inserts once even when its text matches an older accepted reply", () => {
   const current = state();
   current.messages = current.messages.map(message => ({ ...message, id: `t:${message.role}`, turnId: "t" }));
-  current.llmStatus = { pending: true };
-  const commit = createConversationCommit(current, { ...current, llmStatus: { pending: false, enrichmentPending: true } }, { kind: "quick", turnId: "t" });
+  const reply = current.messages.pop();
+  current.messages.unshift({ role: "tutor", text: reply.text });
+  current.llmStatus = { pending: true, stage: "quick-reply" };
+  const commit = createConversationCommit(current, { ...current, messages: [...current.messages, reply],
+    llmStatus: { pending: false, enrichmentPending: true } }, { kind: "quick", turnId: "t" });
   const first = applyConversationCommit(current, commit);
   assert.equal(first.accepted, true);
-  assert.equal(applyConversationCommit(first.state, commit).accepted, false);
+  assert.equal(first.state.session.turnCount, 1);
+  assert.equal(first.state.llmStatus.pending, undefined);
+  assert.equal(first.state.llmStatus.stage, undefined);
+  assert.equal(first.state.messages.filter(message => message.id === "t:tutor").length, 1);
+  const replay = applyConversationCommit(first.state, commit);
+  assert.equal(replay.accepted, false);
+  assert.equal(replay.state.session.turnCount, 1);
 });
 
 test("rejected delivery does not start enrichment even if the reply text is unchanged", async () => {
-  let live = state();
+  const local = state();
+  let live = { ...local, messages: local.messages.slice(0, -2) };
   const controller = createConversationController({
     quickApi: async () => ({ reply: "本地回复", llmStatus: { used: true } }),
     enrichmentApi: () => assert.fail("rejected reply must not be enriched")
   });
-  const outcome = await controller.run({ turn: controller.begin(), input: "聊聊今天", localTurn: live,
-    stateForRequest: live, getState: () => live, onPending: next => { live = next; }, onQuickReply: () => false });
+  const outcome = await controller.run({ turn: controller.begin(), input: "聊聊今天", localTurn: local,
+    stateForRequest: live, getState: () => live, onPending: commit => { live = applyConversationCommit(live, commit).state; return live; }, onQuickReply: () => false });
   assert.equal(outcome.status, "cancelled");
 });
 

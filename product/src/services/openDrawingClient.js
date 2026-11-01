@@ -8,7 +8,13 @@ export async function routeDrawing(input, board, messages, signal, pendingReques
         pendingRequest: typeof pendingRequest === "string" ? pendingRequest.slice(0, 1000) : undefined,
         context: messages.slice(-4).map(m => ({ role: m.role, text: m.text })) }) });
     if (!response.ok) throw new Error("route");
-    return await response.json();
+    const route = await response.json();
+    const hasText = value => typeof value === "string" && value.trim().length > 0;
+    if (!route || !["chat", "precise", "clarify", "image"].includes(route.mode) ||
+      (route.mode === "clarify" && !hasText(route.reply)) ||
+      (route.mode === "image" && (!hasText(route.instruction) ||
+        !["create", "edit"].includes(route.operation) || typeof route.available !== "boolean"))) throw new Error("route-contract");
+    return route;
   } catch { return { mode: "clarify", reply: "这次绘画请求没处理成功。内容还记着，你可以说再试一次。" }; }
 }
 

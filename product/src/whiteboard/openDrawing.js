@@ -31,19 +31,45 @@ export function undoImageBoard(board) {
 }
 
 // One job per session. A later drawing or session end invalidates late responses.
-export function createDrawingJob() {
-  let active;
+export function createDrawingJob({ trace = () => {} } = {}) {
+  let active, sequence = 0, snapshot = { phase: "idle" };
+  function cancel() {
+    if (!active) return;
+    active.controller.abort();
+    trace("drawing.cancelled", { ...active.identity, reason: "stopped" });
+    snapshot = { ...active.identity, phase: "cancelled" };
+    active = null;
+  }
   return {
-    cancel() { active?.abort(); active = null; },
-    async run(work, commit, fail) {
-      active?.abort();
-      const controller = new AbortController(); active = controller;
+    cancel,
+    getSnapshot: () => Object.freeze({ ...snapshot }),
+    async run(work, commit, fail, context = {}) {
+      cancel();
+      const controller = new AbortController();
+      const identity = { taskId: `drawing-image-${++sequence}`, phase: "image",
+        sessionId: context.sessionId, turnId: context.turnId, baseRevision: context.baseRevision };
+      const job = { controller, identity }; active = job;
+      snapshot = { ...identity, phase: "pending" };
+      trace("drawing.requested", identity);
+      let received = false;
       try {
         const result = await work(controller.signal);
-        if (active === controller && !controller.signal.aborted) commit(result);
+        received = true;
+        trace("drawing.received", identity);
+        if (active !== job || controller.signal.aborted) {
+          trace("drawing.rejected", { ...identity, reason: "stale-task" });
+          return;
+        }
+        const accepted = commit(result) !== false;
+        trace(accepted ? "drawing.accepted" : "drawing.rejected", { ...identity, reason: accepted ? undefined : "base-changed" });
+        if (active === job) snapshot = { ...identity, phase: accepted ? "complete" : "rejected" };
       } catch (error) {
-        if (active === controller && !controller.signal.aborted) fail(error);
-      } finally { if (active === controller) active = null; }
+        if (active === job && !controller.signal.aborted) {
+          snapshot = { ...identity, phase: "failed" };
+          trace("drawing.failed", { ...identity, reason: received ? "publish-failed" : "request-failed" });
+          fail(error);
+        } else trace("drawing.rejected", { ...identity, reason: "stale-task" });
+      } finally { if (active === job) active = null; }
     }
   };
 }

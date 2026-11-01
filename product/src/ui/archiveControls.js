@@ -20,7 +20,7 @@ export function mountArchiveControls({ getState, requestAccess, onCommitted, onC
   const announce = (text) => { status.textContent = text; };
   const snapshot = () => JSON.stringify(loadLocalStudentDb());
   const canChange = () => {
-    if (getState().session?.status === "active" || getState().llmStatus?.pending) {
+    if (getState().session?.status === "active") {
       announce("请先结束聊天，再整理或恢复记录。"); return false;
     }
     return true;

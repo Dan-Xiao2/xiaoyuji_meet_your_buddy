@@ -1,0 +1,12 @@
+body { background: var(--page); color: var(--ink); }
+.voice-lab { max-width: 680px; margin: 32px auto; padding: 24px; line-height: 1.65; }
+.voice-lab h1 { font-size: 28px; }
+.voice-lab label { display: block; margin: 16px 0; }
+.voice-lab input:not([type=checkbox]), .voice-lab select { font: inherit; max-width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.voice-lab button { margin: 6px 8px 6px 0; min-height: 48px; }
+.voice-lab .consent { display: flex; gap: 10px; align-items: start; }
+.voice-lab details { margin-top: 24px; }
+.voice-lab li { overflow-wrap: anywhere; }
+.voice-lab #error { color: var(--xy-error); }
+.voice-lab :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+@media (max-width: 700px) { .voice-lab { margin: 0 auto; padding: 20px; } }

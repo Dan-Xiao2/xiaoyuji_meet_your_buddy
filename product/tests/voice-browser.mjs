@@ -1,3 +1,4 @@
+import { waitForConversationPhase } from "./helpers/runtimeDiagnostics.mjs";
 import assert from "node:assert/strict";
 import { createInitialState } from "../src/data/studentModel.js";
 import { createInitialFamily } from "../src/data/familyModel.js";
@@ -96,7 +97,7 @@ try {
     assert.equal((await readDb()).growthMoments.length, 1, "Save the first turn before it can be interrupted");
     await page.evaluate(() => window.emitSpeech("我喜欢蓝色"));
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).session.turnCount === 2);
-    await page.waitForFunction(() => !JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).llmStatus.enrichmentPending);
+    await waitForConversationPhase(page, "complete");
     await page.waitForFunction(() => window.recognitionStarts >= 3);
     await page.locator("#endChildSession").click();
     const listenCount = await page.evaluate(() => window.recognitionStarts);
@@ -142,7 +143,8 @@ try {
     await page.evaluate(() => {
       window.streamMode = "unavailable";
       window.voiceEvents = [];
-      window.speechSynthesis.speak = utterance => { utterance.onstart?.(); utterance.onend?.(); };
+      window.systemSpeechCalls = 0;
+      window.speechSynthesis.speak = () => { window.systemSpeechCalls++; };
       window.testVoice.speak("测试降级", {
         onStart: () => window.voiceEvents.push("start"),
         onEnd: () => window.voiceEvents.push("end"),
@@ -150,8 +152,9 @@ try {
         onTiming: timing => { if (timing.stage === "tts-stream-fallback") window.voiceEvents.push("fallback"); }
       });
     });
-    await page.waitForFunction(() => window.voiceEvents.includes("end"));
-    assert.deepEqual(await page.evaluate(() => window.voiceEvents), ["fallback", "start", "end"]);
+    await page.waitForFunction(() => window.voiceEvents.includes("error"));
+    assert.deepEqual(await page.evaluate(() => window.voiceEvents), ["fallback", "error"]);
+    assert.equal(await page.evaluate(() => window.systemSpeechCalls), 0, "Failed cloud audio must not switch to an unrelated system voice");
     assert.deepEqual(errors, []);
     console.log(`${width}px: early playback, auto-listen before enrichment, turn persistence, stale results, session end, cancellation and partial failure passed`);
     await context.close();

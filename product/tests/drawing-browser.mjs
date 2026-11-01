@@ -1,13 +1,13 @@
+import { waitForConversationPhase } from "./helpers/runtimeDiagnostics.mjs";
 import assert from "node:assert/strict";
 import { createInitialState } from "../src/data/studentModel.js";
 import { createInitialFamily } from "../src/data/familyModel.js";
-import { createTutorTurn } from "../src/services/tutorEngine.js";
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
 const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
 try {
   for (const width of [390, 1440]) {
     const context = await browser.newContext({ viewport: { width, height: 850 } });
-    const page = await context.newPage(), errors = [], requests = [];
+    const page = await context.newPage(), errors = [], requests = [], routes = [], unexpected = [];
     page.on("pageerror", error => errors.push(error.message));
     const state = createInitialState();
     state.uiVersion = 4;
@@ -17,14 +17,27 @@ try {
     await page.addInitScript(state => localStorage.setItem("xiaoyuji-learning-state-v1", JSON.stringify(state)), state);
     await page.route("**/api/**", async route => {
       const path = new URL(route.request().url()).pathname;
-      let response = {};
-      if (path.startsWith("/api/tutor")) {
+      let response;
+      if (path === "/api/voice-status") response = {};
+      else if (path === "/api/whiteboard/route") {
+        const payload = route.request().postDataJSON(); routes.push(payload.input);
+        response = payload.input === "太阳为什么会发光" ? { mode: "chat" }
+          : payload.input === "画一只恐龙" ? { mode: "image", operation: "create", instruction: payload.input, available: false }
+          : payload.input === "画一只鲸鱼" ? {}
+          : null;
+      } else if (path === "/api/tutor/quick") {
         const payload = route.request().postDataJSON(); requests.push(payload.input);
-        response = path.endsWith("/quick") ? { reply: "太阳里面的变化会放出很多能量，所以会发光。" } : createTutorTurn(payload.input, payload.state);
+        response = { reply: "太阳里面的变化会放出很多能量，所以会发光。", llmStatus: { used: false } };
+      }
+      if (!response) {
+        unexpected.push(path);
+        await route.fulfill({ status: 500, body: "Unexpected test request" });
+        return;
       }
       await route.fulfill({ contentType: "application/json", body: JSON.stringify(response) });
     });
     await page.goto(process.env.TEST_URL || "http://localhost:4174/");
+    await page.waitForFunction(() => document.documentElement.dataset.appReady === "true");
     await page.evaluate(() => document.querySelector("#speakReplies").checked = false);
     const send = async text => {
       await page.evaluate(text => {
@@ -50,20 +63,38 @@ try {
     assert.equal(db.growthMoments.length, 3);
     assert.equal(db.growthMoments[0].domain, "art");
     assert.deepEqual(db.growthMoments[0].boardSnapshot.scene.subjects, ["house", "sun"]);
+    const retainedBoard = await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).board);
     await send("太阳为什么会发光");
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).llmStatus?.stage === "complete");
+    await waitForConversationPhase(page, "complete");
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")));
     assert.match(saved.messages.at(-1).text, /太阳/);
     assert.doesNotMatch(saved.messages.at(-1).text, /积木/);
     assert.equal(saved.lastAssessment, null);
-    assert.equal(await page.locator(".illustration-scene").count(), 0);
+    assert.deepEqual(requests, ["太阳为什么会发光"], "The topic question actually reaches Tutor");
+    assert.deepEqual(saved.board, retainedBoard, "Chat preserves the accepted drawing");
+    assert.equal(await page.locator(".illustration-scene").count(), 1);
+    const topicMoment = await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-local-student-db-v1")).growthMoments[0]);
+    assert.equal(topicMoment.domain, "language", "An ordinary question does not inherit art from the screen");
+    assert.equal(topicMoment.lessonTitle, "");
+    assert.equal(topicMoment.boardSnapshot, null);
+    assert.ok(!topicMoment.topics.includes(saved.board.title));
     await send("画一只恐龙");
+    await waitForConversationPhase(page, "complete");
     assert.equal(await page.locator(".block-scene").count(), 0);
-    assert.equal(await page.locator(".illustration-scene").count(), 0);
+    assert.equal(await page.locator(".illustration-scene").count(), 1, "Unavailable generation keeps the previous picture");
     const text = await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).messages.at(-1).text);
-    assert.match(text, /暂时/);
+    assert.match(text, /图片功能还没开启/);
+    await send("画一只鲸鱼");
+    await waitForConversationPhase(page, "complete");
+    const afterInvalidRoute = await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")));
+    assert.match(afterInvalidRoute.messages.at(-1).text, /没处理成功/);
+    assert.deepEqual(afterInvalidRoute.board, retainedBoard, "Malformed route cannot change the picture");
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-local-student-db-v1")).growthMoments.length), 4,
+      "Unavailable or malformed drawing requests do not invent growth evidence");
+    assert.deepEqual(routes, ["太阳为什么会发光", "画一只恐龙", "画一只鲸鱼"]);
+    assert.deepEqual(unexpected, [], "No unmocked plan, image or enrichment request");
     assert.deepEqual(errors, []);
-    console.log(`${width}px: drawing request, scene addition, recolor, topic change, unsupported object and saved art evidence passed`);
+    console.log(`${width}px: drawing, recolor, retained picture, turn-owned evidence and unavailable image generation passed`);
     await context.close();
   }
 } finally { await browser.close(); }

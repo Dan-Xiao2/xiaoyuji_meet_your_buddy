@@ -3,18 +3,17 @@ import { checkChildSafety, createSafetyTurn, safeConversationMessages } from "./
 import { ensureStudentModel } from "../student/studentSchema.js";
 import { evaluateAnswer, syncLegacyMemory, updateStudentAfterTurn } from "../student/memoryUpdater.js";
 import { planLesson, planNextAfterResult } from "../student/lessonPlanner.js";
-import { appendStudentEvent, persistStudentModel } from "../data/localStudentDb.js";
 import { chooseOfflineActivity } from "../offline/offlineActivityLibrary.js";
 import { continueStoryLesson } from "../story/storyEngine.js";
 import { adaptTutorReply } from "../content/ageAdaptation.js";
 import { resolveVisualPlan } from "../whiteboard/visualPlan.js";
 import { isLessonAnswer, conversationControlReply } from "./conversationIntent.js";
 
-export function createConversationTurn(input, currentState) {
-  return createTutorTurn(input, currentState, { freeConversation: true });
+export function createConversationTurn(input, currentState, options = {}) {
+  return createTutorTurn(input, currentState, { ...options, freeConversation: true });
 }
 
-export function createTutorTurn(input, currentState, { freeConversation = false } = {}) {
+export function createTutorTurn(input, currentState, { freeConversation = false, onStudentEvent = () => {} } = {}) {
   const studentModel = ensureStudentModel(currentState);
   const safety = checkChildSafety(input, currentState);
   if (!safety.ok) {
@@ -52,16 +51,16 @@ export function createTutorTurn(input, currentState, { freeConversation = false 
     };
   }
   if (isLessonAnswer(input, currentState.activeLesson)) {
-    return handleStudentAnswer(input, currentState, studentModel);
+    return handleStudentAnswer(input, currentState, studentModel, onStudentEvent);
   }
 
   if (currentState.activeLesson?.activity === "story" && /(选|门|红色|蓝色|绿色|继续)/.test(input)) {
-    return handleStoryChoice(input, currentState, studentModel);
+    return handleStoryChoice(input, currentState, studentModel, onStudentEvent);
   }
 
   const activity = classifyActivity(input);
   const activeLesson = planLesson(studentModel, activity, input);
-  appendStudentEvent(studentModel.studentId, "lesson_started", {
+  onStudentEvent(studentModel.studentId, "lesson_started", {
     activity,
     skill: activeLesson.skill,
     difficulty: activeLesson.difficulty,
@@ -94,11 +93,10 @@ export function createTutorTurn(input, currentState, { freeConversation = false 
   };
 }
 
-function handleStudentAnswer(input, currentState, studentModel) {
+function handleStudentAnswer(input, currentState, studentModel, onStudentEvent) {
   const result = evaluateAnswer(input, currentState.activeLesson);
   const updatedStudentModel = updateStudentAfterTurn(studentModel, currentState.activeLesson, result);
-  persistStudentModel(updatedStudentModel);
-  appendStudentEvent(updatedStudentModel.studentId, "student_answered", {
+  onStudentEvent(updatedStudentModel.studentId, "student_answered", {
     lessonId: currentState.activeLesson.id,
     skill: currentState.activeLesson.skill,
     answer: result.answer,
@@ -189,7 +187,7 @@ export function classifyActivity(input) {
   return "language";
 }
 
-function handleStoryChoice(input, currentState, studentModel) {
+function handleStoryChoice(input, currentState, studentModel, onStudentEvent) {
   const nextLesson = continueStoryLesson(input, currentState.activeLesson);
   const tutorText = adaptTutorReply(
     `${currentState.profile.name || "小朋友"}，你选了${nextLesson.story.childChoice}。${nextLesson.story.ending} 故事先停在这里。现在可以离开屏幕，把刚才的选择画出来，或者讲给家长听。`,
@@ -210,7 +208,7 @@ function handleStoryChoice(input, currentState, studentModel) {
     lastAssessment: null
   });
 
-  appendStudentEvent(studentModel.studentId, "story_choice_made", {
+  onStudentEvent(studentModel.studentId, "story_choice_made", {
     lessonId: currentState.activeLesson.id,
     choice: nextLesson.story.childChoice,
     recap: nextLesson.story.recap

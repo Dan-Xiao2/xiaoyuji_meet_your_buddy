@@ -52,7 +52,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .child-stage[data-layout=whiteboard] .child-voice-orb { width: 76px; height: 76px; }
 .child-stage[data-layout=whiteboard] .xiaoyu-talk-visual { width: 76px; height: 76px; }
 .child-stage[data-layout=whiteboard] .xiaoyu-talk-character { box-shadow: none; }
-.child-whiteboard .illustration-scene { background: white; box-shadow: none; border: 0; }
+.child-whiteboard .illustration-scene { padding-bottom: 16px; background: white; box-shadow: none; border: 0; }
 .adult-fallback { grid-row: 4; }
 .hidden-message-log { display: none; }
 

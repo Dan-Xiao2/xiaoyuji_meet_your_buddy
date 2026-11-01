@@ -1,3 +1,4 @@
+import { createParser } from "eventsource-parser";
 import { createConversationTurn as createTutorTurn } from "../src/services/tutorEngine.js";
 import { adaptTutorReply, getAgeInstruction } from "../src/content/ageAdaptation.js";
 import { createKnowledgeContext, selectKnowledgeCards } from "./knowledgeCardSelector.mjs";
@@ -11,6 +12,7 @@ import { scienceInstruction, guardScienceReply } from "./scienceContext.mjs";
 const DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 
 export async function createTutorTurnWithQwen(input, currentState, { signal, spokenReply } = {}) {
+  signal?.throwIfAborted();
   const deliveredReply = typeof spokenReply === "string" && checkTutorSafetyOutput(spokenReply).ok ? spokenReply.slice(0, 600) : "";
   const localState = createTutorTurn(input, currentState);
   if (localState.visualPlan) return localState;
@@ -36,6 +38,7 @@ export async function createTutorTurnWithQwen(input, currentState, { signal, spo
   const startedAt = Date.now();
   try {
     const llmTurn = await callQwenTutor(input, currentState, localState, knowledge, signal, deliveredReply);
+    signal?.throwIfAborted();
     const grounded = guardScienceReply(llmTurn.tutorReply || "", input, currentState);
     const drawingGuard = guardDrawingReply(grounded.reply, input, currentState);
     llmTurn.tutorReply = drawingGuard.reply;
@@ -53,6 +56,7 @@ export async function createTutorTurnWithQwen(input, currentState, { signal, spo
     nextState.llmStatus.drawingClaimFallback = drawingGuard.replaced;
     return nextState;
   } catch (error) {
+    signal?.throwIfAborted();
     console.warn("Qwen tutor fallback:", error.message);
     return {
       ...localState,
@@ -67,31 +71,41 @@ export async function createTutorTurnWithQwen(input, currentState, { signal, spo
   }
 }
 
-export async function createQuickTutorReplyWithQwen(input, currentState, fallbackReply = "", { signal } = {}) {
+// Decides whether a quick reply is answered locally (safety, control phrases, drawing plan,
+// model disabled) or needs the model. Shared by the whole-reply and streamed paths so the
+// two cannot drift apart.
+function resolveQuickGate(input, currentState, fallbackReply) {
   const safety = checkChildSafety(input, currentState);
-  if (!safety.ok) return {
+  if (!safety.ok) return { local: {
     reply: safety.reply,
     llmStatus: { provider: "local", used: false, fallback: false, latencyMs: 0 }
-  };
+  } };
   const controlReply = conversationControlReply(input);
-  if (controlReply) return {
+  if (controlReply) return { local: {
     reply: controlReply,
     llmStatus: { provider: "local", used: false, fallback: false, latencyMs: 0 }
-  };
+  } };
   const fallback = shortText(checkTutorSafetyOutput(fallbackReply).ok ? fallbackReply || "我听到了。我们一起想一想。" : "这句话我需要再确认，不能随便给你建议。", 180);
   const visualPlan = resolveVisualPlan(input, currentState);
-  if (visualPlan) return { reply: visualPlan.reply, llmStatus: { provider: "local", used: false, fallback: false } };
+  if (visualPlan) return { local: { reply: visualPlan.reply, llmStatus: { provider: "local", used: false, fallback: false } } };
   const knowledge = selectKnowledgeCards({ input, currentState });
-  if (!shouldUseQwen(currentState, input)) {
-    return {
-      reply: fallback,
-      llmStatus: { provider: "local", used: false, fallback: true, latencyMs: 0 }
-    };
-  }
+  if (!shouldUseQwen(currentState, input)) return { local: {
+    reply: fallback,
+    llmStatus: { provider: "local", used: false, fallback: true, latencyMs: 0 }
+  } };
+  return { fallback, knowledge };
+}
+
+export async function createQuickTutorReplyWithQwen(input, currentState, fallbackReply = "", { signal } = {}) {
+  signal?.throwIfAborted();
+  const gate = resolveQuickGate(input, currentState, fallbackReply);
+  if (gate.local) return gate.local;
+  const { fallback, knowledge } = gate;
 
   const startedAt = Date.now();
   try {
     const quickResult = await callQwenQuickReply(input, currentState, knowledge, signal);
+    signal?.throwIfAborted();
     const grounded = guardScienceReply(quickResult.reply, input, currentState);
     const drawingGuard = guardDrawingReply(grounded.reply, input, currentState);
     const reply = drawingGuard.reply;
@@ -112,6 +126,7 @@ export async function createQuickTutorReplyWithQwen(input, currentState, fallbac
       }
     };
   } catch (error) {
+    signal?.throwIfAborted();
     return {
       reply: fallback,
       llmStatus: {
@@ -123,6 +138,125 @@ export async function createQuickTutorReplyWithQwen(input, currentState, fallbac
       }
     };
   }
+}
+
+const SENTENCE_END = /^([\s\S]*?[。！？!?]+)/u;
+
+// Streams the quick reply one finished sentence at a time, so speech can start before the model
+// has finished. Each sentence must pass the same checks as the whole-reply path, applied to the
+// reply so far: output safety, known-fact and drawing-claim guards, and the age sentence limit.
+//
+// Trade-off: a sentence already released cannot be taken back. If a later sentence fails a check
+// the reply stops there (stoppedBy says why) instead of being replaced as a whole. Only a failure
+// in the first sentence can be replaced by the fallback.
+//
+// Yields { type: "sentence", text } items, then one { type: "done", llmStatus }. Caller
+// cancellation rejects, as in createQuickTutorReplyWithQwen, and never produces a fallback.
+export async function* streamQuickTutorReplyWithQwen(input, currentState, fallbackReply = "", { signal } = {}) {
+  signal?.throwIfAborted();
+  const gate = resolveQuickGate(input, currentState, fallbackReply);
+  if (gate.local) {
+    yield { type: "sentence", text: gate.local.reply };
+    yield { type: "done", llmStatus: gate.local.llmStatus };
+    return;
+  }
+  const { fallback, knowledge } = gate;
+  const ageBand = currentState.profile?.ageBand;
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const upstreamSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+  const firstTimeoutMs = Number(process.env.TUTOR_QUICK_TIMEOUT_MS || 3500);
+  const totalTimeoutMs = Number(process.env.TUTOR_QUICK_STREAM_TIMEOUT_MS || 10000);
+  let timedOut = false;
+  const expire = () => { timedOut = true; controller.abort(); };
+  const firstTimer = setTimeout(expire, firstTimeoutMs);
+  const totalTimer = setTimeout(expire, totalTimeoutMs);
+  const meta = {};
+  const spoken = [];
+  const pending = [];
+  let buffer = "";
+  let firstSentenceMs = null, stoppedBy = null, errorMessage = null;
+  let fellBack = false, grounding = false, drawing = false;
+  const upstream = callQwenQuickReplyStream(input, currentState, knowledge, upstreamSignal, meta);
+
+  // Decides what to release for one finished sentence: { text } to say it, { stop } to end the
+  // reply, or both. The fallback and guard replacements are only used while nothing was said.
+  const check = (raw) => {
+    const sentence = raw.replace(/\s+/g, " ").replace(/([。！？!?])[。！？!?]+/g, "$1").trim();
+    if (!sentence) return { skip: true };
+    const soFar = [...spoken, sentence];
+    const whole = soFar.join("");
+    const replace = (text, reason) => (spoken.length ? { stop: reason } : { text, stop: reason });
+    if (!checkTutorSafetyOutput(whole).ok) return spoken.length ? { stop: "safety" } : { text: fallback, stop: "safety", fellBack: true };
+    const grounded = guardScienceReply(whole, input, currentState);
+    if (grounded.replaced) return { ...replace(grounded.reply, "grounding"), grounding: true };
+    const drawingGuard = guardDrawingReply(whole, input, currentState);
+    if (drawingGuard.replaced) return { ...replace(drawingGuard.reply, "drawing"), drawing: true };
+    const spaced = soFar.join(" ");
+    const adapted = adaptTutorReply(spaced, ageBand);
+    if (adapted !== spaced) return replace(adapted, "age-limit");
+    return { text: sentence };
+  };
+
+  try {
+    let ended = false;
+    while (!stoppedBy && !ended) {
+      const step = await upstream.next();
+      if (step.done) ended = true; else buffer += step.value;
+      for (let match; (match = SENTENCE_END.exec(buffer));) {
+        pending.push(match[1]);
+        buffer = buffer.slice(match[0].length);
+      }
+      if (ended && buffer.trim()) { pending.push(buffer); buffer = ""; }
+      for (const raw of pending.splice(0)) {
+        const verdict = check(raw);
+        if (verdict.skip) continue;
+        if (verdict.fellBack) fellBack = true;
+        if (verdict.grounding) grounding = true;
+        if (verdict.drawing) drawing = true;
+        if (verdict.text) {
+          spoken.push(verdict.text);
+          if (firstSentenceMs === null) { firstSentenceMs = Date.now() - startedAt; clearTimeout(firstTimer); }
+          yield { type: "sentence", text: verdict.text };
+        }
+        if (verdict.stop) { stoppedBy = verdict.stop; break; }
+      }
+    }
+    if (!spoken.length) throw new Error("Qwen quick reply was empty");
+  } catch (error) {
+    signal?.throwIfAborted();
+    errorMessage = timedOut ? `Qwen quick reply timed out after ${firstSentenceMs === null ? firstTimeoutMs : totalTimeoutMs}ms` : error.message;
+    if (!spoken.length) {
+      fellBack = true;
+      spoken.push(fallback);
+      yield { type: "sentence", text: fallback };
+    } else {
+      stoppedBy = stoppedBy || "error";
+    }
+  } finally {
+    clearTimeout(firstTimer);
+    clearTimeout(totalTimer);
+    controller.abort();
+    try { await upstream.return(); } catch { /* upstream already finished or aborted */ }
+  }
+  yield { type: "done", llmStatus: {
+    provider: "qwen",
+    ...(fellBack ? {} : { model: process.env.QWEN_MODEL || "qwen3.7-flash" }),
+    used: !fellBack,
+    fallback: fellBack,
+    streamed: true,
+    latencyMs: Date.now() - startedAt,
+    firstSentenceMs,
+    ...(errorMessage ? { message: errorMessage } : {}),
+    ...(stoppedBy ? { stoppedBy } : {}),
+    ...(fellBack ? {} : {
+      tokenUsage: meta.usage,
+      knowledgeCardIds: knowledge.cardIds,
+      knowledgeIntent: knowledge.intent,
+      groundingFallback: grounding,
+      drawingClaimFallback: drawing
+    })
+  } };
 }
 
 function shouldUseQwen(currentState, input) {
@@ -186,17 +320,54 @@ async function callQwenTutor(input, currentState, localState, knowledge, signal,
 
 }
 
-async function callQwenQuickReply(input, currentState, knowledge, signal) {
-  const baseUrl = trimTrailingSlash(process.env.QWEN_BASE_URL || DEFAULT_BASE_URL);
+function buildQuickReplyBody(input, currentState, knowledge, { stream = false } = {}) {
   const model = process.env.QWEN_MODEL || "qwen3.7-flash";
-  const timeoutMs = Number(process.env.TUTOR_QUICK_TIMEOUT_MS || 3500);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const speaker = currentState.activeSpeaker || { name: currentState.profile?.name || "孩子", role: "child" };
   const recentMessages = safeConversationMessages(currentState.messages)
     .slice(-12)
     .map((message) => `${message.speakerName || message.role}: ${message.text}`)
     .join("\n");
+  return JSON.stringify({
+    model,
+    messages: [
+      {
+        role: "system",
+        content: [
+          "你是儿童成长陪伴角色小宇。现在只生成马上读给用户听的中文口语回答。",
+          drawingCapability,
+          drawingExecutionRule,
+          conversationPrinciple,
+          explorationInstruction,
+          scienceInstruction(input, currentState),
+          safetyInstruction,
+          `年龄段：${currentState.profile?.ageBand || "4-5"}岁。${getAgeInstruction(currentState.profile?.ageBand || "4-5")}`,
+          speaker.role === "child"
+            ? "直接回应孩子刚才说的内容，温暖、具体、容易听懂。最多3个短句，尽量不超过90个汉字。"
+            : "这是家人说的话。简短确认这是家人观察，并邀请补充具体情境，不把它说成孩子原话。",
+          "不要输出JSON、Markdown、标题或设计说明。不要索要姓名、地址、学校、电话、照片等信息。",
+          "孩子明确要求故事时才讲一个很短的开头；普通为什么问题先直接解释。",
+          createKnowledgeContext(knowledge)
+        ].join("\n")
+      },
+      {
+        role: "user",
+        content: JSON.stringify({ speakerInput: input, speakerRole: speaker.role || "child", recentMessages,
+          inputModality: "text", imageAvailable: false })
+      }
+    ],
+    enable_thinking: false,
+    stream,
+    ...(stream ? { stream_options: { include_usage: true } } : {}),
+    temperature: 0.65,
+    max_completion_tokens: Number(process.env.TUTOR_QUICK_MAX_OUTPUT_TOKENS || 180)
+  });
+}
+
+async function callQwenQuickReply(input, currentState, knowledge, signal) {
+  const baseUrl = trimTrailingSlash(process.env.QWEN_BASE_URL || DEFAULT_BASE_URL);
+  const timeoutMs = Number(process.env.TUTOR_QUICK_TIMEOUT_MS || 3500);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -206,39 +377,7 @@ async function callQwenQuickReply(input, currentState, knowledge, signal) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.QWEN_API_KEY}`
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "system",
-            content: [
-              "你是儿童成长陪伴角色小宇。现在只生成马上读给用户听的中文口语回答。",
-              drawingCapability,
-              drawingExecutionRule,
-              conversationPrinciple,
-              explorationInstruction,
-              scienceInstruction(input, currentState),
-              safetyInstruction,
-              `年龄段：${currentState.profile?.ageBand || "4-5"}岁。${getAgeInstruction(currentState.profile?.ageBand || "4-5")}`,
-              speaker.role === "child"
-                ? "直接回应孩子刚才说的内容，温暖、具体、容易听懂。最多3个短句，尽量不超过90个汉字。"
-                : "这是家人说的话。简短确认这是家人观察，并邀请补充具体情境，不把它说成孩子原话。",
-              "不要输出JSON、Markdown、标题或设计说明。不要索要姓名、地址、学校、电话、照片等信息。",
-              "孩子明确要求故事时才讲一个很短的开头；普通为什么问题先直接解释。",
-              createKnowledgeContext(knowledge)
-            ].join("\n")
-          },
-          {
-            role: "user",
-            content: JSON.stringify({ speakerInput: input, speakerRole: speaker.role || "child", recentMessages,
-              inputModality: "text", imageAvailable: false })
-          }
-        ],
-        enable_thinking: false,
-        stream: false,
-        temperature: 0.65,
-        max_completion_tokens: Number(process.env.TUTOR_QUICK_MAX_OUTPUT_TOKENS || 180)
-      })
+      body: buildQuickReplyBody(input, currentState, knowledge)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error?.message || `Qwen quick reply failed with ${response.status}`);
@@ -250,6 +389,54 @@ async function callQwenQuickReply(input, currentState, knowledge, signal) {
     throw error;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+// Yields raw text deltas from the model as they arrive. Token usage, when the provider
+// reports it, is written to meta.usage.
+async function* callQwenQuickReplyStream(input, currentState, knowledge, signal, meta) {
+  const baseUrl = trimTrailingSlash(process.env.QWEN_BASE_URL || DEFAULT_BASE_URL);
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    signal,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.QWEN_API_KEY}`
+    },
+    body: buildQuickReplyBody(input, currentState, knowledge, { stream: true })
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error?.message || `Qwen quick reply failed with ${response.status}`);
+  }
+  if (!response.body) throw new Error("Qwen quick reply returned no stream");
+  const decoder = new TextDecoder();
+  const texts = [];
+  let failure = null;
+  const parser = createParser({
+    onError: (error) => { failure = error; },
+    onEvent: ({ data }) => {
+      if (data === "[DONE]") return;
+      try {
+        const event = JSON.parse(data);
+        if (event.error) throw new Error(event.error.message || "Qwen quick reply stream failed");
+        const text = event.choices?.[0]?.delta?.content;
+        if (typeof text === "string" && text) texts.push(text);
+        if (event.usage) meta.usage = normalizeTokenUsage(event.usage);
+      } catch (error) { failure = error; }
+    }
+  });
+  try {
+    for await (const chunk of response.body) {
+      parser.feed(decoder.decode(chunk, { stream: true }));
+      if (failure) throw failure;
+      while (texts.length) yield texts.shift();
+    }
+    parser.feed(decoder.decode());
+    if (failure) throw failure;
+    while (texts.length) yield texts.shift();
+  } finally {
+    try { await response.body.cancel(); } catch { /* already closed */ }
   }
 }
 

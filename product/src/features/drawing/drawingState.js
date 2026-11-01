@@ -1,3 +1,4 @@
+import { selectModelDiagnostics } from "../../services/modelDiagnostics.js";
 import { replaceLatestTutorReply } from "../conversation/conversationState.js";
 import { captureEnrichmentBaseline } from "../../session/enrichmentState.js";
 
@@ -50,6 +51,6 @@ export function retainUpdatedDrawing(current, turn) {
   return replaceLatestTutorReply({
     ...turn, board: current.board, drawingRequest: current.drawingRequest,
     visualPlan: { changed: false }, growthEvidence: null,
-    llmStatus: { ...turn.llmStatus, pending: false, enrichmentPending: false, fallback: true, stage: "drawing-stale" }
+    llmStatus: { ...selectModelDiagnostics(turn.llmStatus), fallback: true }
   }, "画面刚刚更新了，这次没有继续修改。你可以接着告诉我怎么改。");
 }

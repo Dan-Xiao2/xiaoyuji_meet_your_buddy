@@ -1,3 +1,4 @@
+import { waitForConversationPhase } from "./helpers/runtimeDiagnostics.mjs";
 import assert from "node:assert/strict";
 import { createInitialState } from "../src/data/studentModel.js";
 import { createInitialFamily } from "../src/data/familyModel.js";
@@ -41,19 +42,40 @@ try {
         return new Response(new Uint8Array(48000), { headers: { "content-type": "audio/pcm" } });
       };
     }, state);
-    let tutorCalls = 0;
+    let tutorCalls = 0, releaseEnrichment;
+    const unexpected = [];
+    const enrichmentStarted = new Promise(resolve => { releaseEnrichment = { started: resolve }; });
+    const enrichmentGate = new Promise(resolve => { releaseEnrichment.finish = resolve; });
     await page.route("**/api/**", async route => {
       const path = new URL(route.request().url()).pathname;
-      let result = {};
-      if (path.startsWith("/api/tutor")) {
+      let result;
+      if (path === "/api/voice-status") result = {};
+      else if (path === "/api/speech") {
+        // Disable MP3 prefetch explicitly; the synthetic PCM stream remains the playback source.
+        await route.fulfill({ status: 503, body: "Test uses streaming PCM" });
+        return;
+      }
+      else if (path === "/api/tutor/quick" || path === "/api/tutor") {
         tutorCalls++;
         const payload = route.request().postDataJSON();
-        result = path.endsWith("/quick") ? { reply: "你想知道恐龙的什么呢？" } :
-          { ...payload.state, board: { type: "science", variant: "moon", items: ["太阳", "地球", "月亮"] } };
+        assert.equal(payload.input, "那恐龙呢");
+        if (path.endsWith("/quick")) result = { reply: "你想知道恐龙的什么呢？", llmStatus: { used: true } };
+        else {
+          releaseEnrichment.started();
+          await enrichmentGate;
+          result = { board: { type: "science", variant: "moon", items: ["太阳", "地球", "月亮"] },
+            growthEvidence: { shouldSave: true, sourceQuote: payload.input, topics: ["恐龙"], observation: "孩子提到了恐龙。", inference: "" },
+            llmStatus: { used: true, model: "test-model" } };
+        }
+      } else {
+        unexpected.push(path);
+        await route.fulfill({ status: 500, body: "Unexpected test request" });
+        return;
       }
       await route.fulfill({ contentType: "application/json", body: JSON.stringify(result) });
     });
     await page.goto(process.env.TEST_URL || "http://localhost:4174/");
+    await page.waitForFunction(() => document.documentElement.dataset.appReady === "true");
     assert.equal(await page.locator("#childWhiteboardPanel").isVisible(), false);
     await page.locator("#mainVoiceButton").click();
     await page.waitForFunction(() => window.recognitionStarts === 1);
@@ -115,23 +137,46 @@ try {
     const readDb = () => page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-local-student-db-v1")));
     assert.equal((await readDb()).growthMoments.length, 3);
     assert.equal((await readDb()).growthMoments[0].boardSnapshot.scene.given, 2);
+    const retainedBoard = await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).board);
+    const spokenBeforeReplay = await page.evaluate(() => window.spokenSteps.length);
     await page.locator(".scene-replay").click();
-    await page.waitForTimeout(100);
+    await page.waitForFunction(() => document.querySelector(".block-scene")?.dataset.given === "3");
     await page.evaluate(() => {
       document.querySelector("#childInput").value = "那恐龙呢";
       document.querySelector("#askForm").requestSubmit();
     });
-    await page.waitForFunction(() => !JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).llmStatus?.enrichmentPending);
+    await Promise.race([enrichmentStarted, new Promise((_, reject) => setTimeout(() => reject(new Error("Enrichment never started")), 5000))]);
+    const quickMoment = (await readDb()).growthMoments[0];
+    assert.equal(quickMoment.childQuote, "那恐龙呢");
+    assert.equal(quickMoment.domain, "language", "Quick reply must not inherit the displayed math scene");
+    assert.equal(quickMoment.lessonTitle, "");
+    assert.equal(quickMoment.boardSnapshot, null);
+    assert.ok(!quickMoment.topics.includes(retainedBoard.title));
+    releaseEnrichment.finish();
+    await waitForConversationPhase(page, "complete");
     await page.waitForTimeout(1400);
-    assert.equal(await page.locator(".block-scene").count(), 0, "Replay cannot restore a stale scene after changing topic");
-    assert.equal(await page.locator("#childWhiteboardPanel").isVisible(), false, "Unrelated model moon drawing is rejected");
+    assert.equal(tutorCalls, 2, "Both quick reply and forbidden-board enrichment actually execute");
+    assert.equal(await page.locator(".block-scene").count(), 1, "Chat may keep the accepted scene visible");
+    assert.equal(await page.locator("#childWhiteboardPanel").isVisible(), true);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).board), retainedBoard,
+      "Enrichment must not publish its unrelated moon drawing");
+    assert.equal(await page.locator(".block-scene").getAttribute("data-given"), "3", "Cancelled visual replay cannot advance its scheduled second step");
+    assert.deepEqual(await page.evaluate(n => window.spokenSteps.slice(n), spokenBeforeReplay), ["你想知道恐龙的什么呢？"],
+      "After interrupting replay, only the new answer may be spoken");
     assert.equal((await readDb()).growthMoments.length, 4, "Replay and taps create no invented growth records");
-    assert.equal((await readDb()).growthMoments[0].boardSnapshot.type, "blank");
+    assert.equal((await readDb()).growthMoments[0].boardSnapshot, null);
+    const enrichedMoment = (await readDb()).growthMoments[0];
+    assert.equal(enrichedMoment.id, quickMoment.id);
+    assert.equal(enrichedMoment.revision, quickMoment.revision + 1);
+    assert.equal(enrichedMoment.domain, "language");
+    assert.equal(enrichedMoment.lessonTitle, "");
+    assert.deepEqual(enrichedMoment.topics, ["恐龙"]);
     await page.locator("#endChildSession").click();
     const starts = await page.evaluate(() => window.recognitionStarts);
     await page.waitForTimeout(1300);
     assert.equal(await page.evaluate(() => window.recognitionStarts), starts);
     assert.deepEqual(errors, []);
+    assert.deepEqual(unexpected, []);
     console.log(`${width}px: scene/speech timing, object identity, taps, replay cancellation, relevance, archive and layout passed`);
     await context.close();
   }

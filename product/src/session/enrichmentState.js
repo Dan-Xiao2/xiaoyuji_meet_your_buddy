@@ -1,3 +1,4 @@
+import { selectModelDiagnostics } from "../services/modelDiagnostics.js";
 const isObject = value => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 const evidenceFields = ["memory", "studentModel", "growthEvidence"];
@@ -13,7 +14,7 @@ export function mergeEnrichmentState(current, enriched, { baseline, onConflict }
   const result = {
     ...current,
     llmStatus: isObject(enriched.llmStatus)
-      ? { ...(current.llmStatus || {}), ...enriched.llmStatus }
+      ? { ...selectModelDiagnostics(current.llmStatus), ...selectModelDiagnostics(enriched.llmStatus) }
       : current.llmStatus
   };
   for (const field of evidenceFields) {

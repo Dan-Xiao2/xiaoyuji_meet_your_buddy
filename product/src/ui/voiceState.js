@@ -1,5 +1,19 @@
 const VOICE_PHASES = new Set(["ready", "listening", "thinking", "speaking", "retry"]);
 
+// Media owns capture/playback; background enrichment/images never block listening.
+export function deriveVoiceUiState({ active = true, visible = true, media = {}, conversation = {}, drawingPlan = {} }, options = {}) {
+  let phase = "ready";
+  if (visible) {
+    if (media.input === "capturing") phase = "listening";
+    else if (media.output === "playing") phase = "speaking";
+    else if (media.failure) phase = "retry";
+    else if (media.input === "processing" || media.output === "preparing") phase = "thinking";
+    else if (active && (conversation.awaitingReply || drawingPlan.phase === "pending")) phase = "thinking";
+    else if (active && conversation.phase === "failed" && !conversation.replyAccepted) phase = "retry";
+  }
+  return createVoiceUiState(phase, { ...options, detail: media.readyDetail || options.detail });
+}
+
 export function getVoiceStageLayout(board = {}) {
   return board?.type && board.type !== "blank" ? "whiteboard" : "voice";
 }

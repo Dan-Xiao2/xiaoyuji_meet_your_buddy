@@ -32,3 +32,6 @@ playwright-report/
 *.epub
 *.mobi
 *.azw3
+
+# Generated LiveKit browser SDK bundle (npm run voice:build)
+src/voice-lab/client.bundle.js

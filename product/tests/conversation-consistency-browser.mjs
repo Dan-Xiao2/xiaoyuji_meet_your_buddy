@@ -1,3 +1,4 @@
+import { waitForConversationPhase } from "./helpers/runtimeDiagnostics.mjs";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { createInitialState } from "../src/data/studentModel.js";
@@ -56,7 +57,7 @@ try {
     await page.goto(process.env.TEST_URL || "http://localhost:4173/");
     await page.waitForFunction(() => document.documentElement.dataset.appReady === "true");
     await page.evaluate(() => { document.querySelector("#childInput").value = "我不想选颜色"; document.querySelector("#askForm").requestSubmit(); });
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).llmStatus?.stage === "quick-reply");
+    await waitForConversationPhase(page, "quick");
     await page.evaluate(() => {
       document.querySelector("#profileForm").elements.studentName.value = "更新后的昵称";
       document.querySelector("#profileForm").requestSubmit();
@@ -66,7 +67,7 @@ try {
     await page.locator("#speechFailure").waitFor({ state: "visible" });
     await page.selectOption("#activeSpeaker", caregiver.id);
     releaseEnrichment();
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).llmStatus?.stage === "complete");
+    await waitForConversationPhase(page, "complete");
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")));
     assert.equal(saved.profile.name, "更新后的昵称");
     assert.equal(saved.family.activeSpeakerId, caregiver.id);

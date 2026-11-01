@@ -37,3 +37,49 @@ test("subscribers can unsubscribe without changing the committed state", () => {
   assert.equal(calls, 1);
   assert.deepEqual(store.getState(), { count: 2 });
 });
+
+test("published snapshots are deeply read-only without freezing caller-owned input", () => {
+  const input = { profile: { name: "原昵称" }, messages: [{ text: "原话" }] };
+  const store = createAppStore(input);
+  input.profile.name = "外部修改";
+  assert.equal(store.getState().profile.name, "原昵称");
+  assert.throws(() => { store.getState().profile.name = "越权"; }, TypeError);
+  assert.throws(() => { store.getState().messages.push({ text: "越权" }); }, TypeError);
+});
+
+test("commits detach caller-owned nested objects and preserve previous snapshots", () => {
+  const store = createAppStore({ profile: { name: "之前" } });
+  const old = store.getState(), notifications = [];
+  store.subscribe((next, previous) => notifications.push({ next, previous }));
+  const input = { profile: { name: "之后" } };
+  store.commit(input);
+  input.profile.name = "迟到修改";
+  assert.equal(old.profile.name, "之前");
+  assert.equal(store.getState().profile.name, "之后");
+  assert.equal(notifications[0].previous, old);
+  assert.throws(() => { notifications[0].next.profile.name = "订阅者修改"; }, TypeError);
+});
+
+test("updates read the latest snapshot and no-op updates do not notify", () => {
+  const store = createAppStore({ count: 0, profile: { name: "原昵称" } });
+  let calls = 0;
+  store.subscribe(() => calls++);
+  store.update(current => ({ ...current, profile: { name: "新昵称" } }));
+  store.update(current => ({ ...current, count: current.count + 1 }));
+  const latest = store.getState();
+  assert.equal(store.update(current => current), latest);
+  assert.deepEqual(latest, { count: 1, profile: { name: "新昵称" } });
+  assert.equal(calls, 2);
+});
+
+test("a mutating updater fails before publication and leaves the accepted state untouched", () => {
+  const store = createAppStore({ profile: { name: "保留" } });
+  const previous = store.getState();
+  let calls = 0;
+  store.subscribe(() => calls++);
+  let entered = false;
+  assert.throws(() => store.update(current => { entered = true; current.profile.name = "越权"; return current; }), TypeError);
+  assert.equal(entered, true, "the updater must run before rejecting its illegal mutation");
+  assert.equal(store.getState(), previous);
+  assert.equal(calls, 0);
+});

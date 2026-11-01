@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readRuntimeDiagnostics, waitWithRuntimeDiagnostics, installRuntimeReader } from "./helpers/runtimeDiagnostics.mjs";
 import { readFile, mkdir } from "node:fs/promises";
 import { createInitialState } from "../src/data/studentModel.js";
 import { resolveIllustrationPlan } from "../src/whiteboard/illustrationPlan.js";
@@ -36,6 +37,10 @@ try {
         speechSynthesis.speak = () => { throw new Error("No system voice fallback"); };
       }, state);
       const calls = [], spoken = [], errors = [];
+      let releaseQuick;
+      const quickGate = new Promise(resolve => { releaseQuick = resolve; });
+      const probeDiagnostics = width === 390 && !existingBoard;
+      const waitAt = (boundary, predicate, arg) => waitWithRuntimeDiagnostics(page, boundary, () => page.waitForFunction(predicate, arg));
       let releaseLast;
       const lastGate = new Promise(resolve => { releaseLast = resolve; });
       page.on("pageerror", error => errors.push(error.message));
@@ -56,6 +61,7 @@ try {
           assert.ok(index >= 0 && index < 4, "Farewell must not request a model");
           if (index > 0) assert.ok(body.state.messages.some(message => message.text === journey.turns[index - 1].input));
           if (pathname === "/api/tutor/quick") {
+            if (probeDiagnostics && index === 0) await quickGate;
             result = { reply: journey.turns[index].referenceReply, llmStatus: { used: true } };
           } else {
             if (existingBoard && index === 3) await lastGate;
@@ -70,20 +76,52 @@ try {
       });
       await page.goto(process.env.TEST_URL || "http://127.0.0.1:4197/");
       await page.waitForFunction(() => document.documentElement.dataset.appReady === "true");
+      await installRuntimeReader(page);
       await page.evaluate(() => { document.querySelector("#speakReplies").checked = false; });
       await page.locator("#mainVoiceButton").click();
-      await page.waitForFunction(() => window.listeningStarts === 1);
+      await waitAt("initial-listen", () => window.listeningStarts === 1);
       for (let index = 0; index < 4; index++) {
         await page.evaluate(text => window.emitSyntheticUtterance(text), journey.turns[index].input);
-        await page.waitForFunction(reply => {
+        if (probeDiagnostics && index === 0) {
+          await page.waitForFunction(() => window.readTestRuntime().snapshots.conversation.phase === "quick");
+          // Deliberately hold the response. Both waits must fail with the real application's trace.
+          try {
+            for (const boundary of ["injected-reply", "injected-auto-listen"]) {
+              await assert.rejects(waitWithRuntimeDiagnostics(page, boundary, () => page.waitForFunction(kind => {
+                if (kind === "injected-auto-listen") return window.listeningStarts >= 2;
+                return !window.readTestRuntime().snapshots.conversation.awaitingReply;
+              }, boundary, { timeout: 80 })), failure => {
+                const diagnostic = failure.runtimeDiagnostics;
+                assert.equal(diagnostic.snapshots.conversation.phase, "quick");
+                const turn = diagnostic.snapshots.conversation;
+                assert.equal(turn.sessionId, "exploration-test");
+                assert.ok(turn.turnId);
+                assert.ok(diagnostic.events.some(event => event.type === "conversation.requested" &&
+                  event.phase === "quick" && event.turnId === turn.turnId && event.sessionId === turn.sessionId));
+                const started = diagnostic.events.find(event => event.type === "conversation.started" && event.turnId === turn.turnId);
+                assert.ok(diagnostic.events.some(event => event.type === "media.capture-completed" &&
+                  event.captureRevision === started.captureRevision && event.sessionId === turn.sessionId));
+                assert.ok(!JSON.stringify(diagnostic).includes("虚构探索家庭"));
+                assert.ok(!JSON.stringify(diagnostic).includes(journey.turns[0].input));
+                return true;
+              });
+            }
+          } finally { releaseQuick(); }
+          console.log("PASS diagnostic fault injection: reply and auto-listen timeouts contain runtime identity/stage without conversation content");
+        }
+        await waitAt("reply", reply => {
           const s = JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1"));
-          return s.messages.at(-1)?.text === reply && !s.llmStatus.pending;
+          return s.messages.at(-1)?.text === reply && window.readTestRuntime().snapshots.conversation.replyAccepted;
         }, journey.turns[index].referenceReply);
         if (!(existingBoard && index === 3)) {
-          await page.waitForFunction(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).llmStatus.stage === "complete");
+          await waitAt("enrichment", () => window.readTestRuntime().snapshots.conversation.phase === "complete");
         }
-        await page.waitForFunction(n => window.listeningStarts >= n, index + 2);
+        await waitAt("auto-listen", n => window.listeningStarts >= n, index + 2);
       }
+      const diagnostic = await readRuntimeDiagnostics(page);
+      assert.deepEqual(Object.keys(diagnostic.snapshots).sort(), ["conversation", "drawingImage", "drawingPlan", "media"]);
+      assert.equal(diagnostic.events.filter(event => event.type === "conversation.accepted" && event.phase === "quick").length, 4);
+      assert.ok(diagnostic.events.some(event => event.type === "media.listen-scheduled"));
       const beforeEnd = await page.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")));
       assert.deepEqual(beforeEnd.board, state.board);
       assert.equal(beforeEnd.activeLesson, null);
@@ -95,7 +133,7 @@ try {
         document.querySelector("#speakReplies").checked = true;
         window.emitSyntheticUtterance(text);
       }, journey.turns.at(-1).input);
-      await page.waitForFunction(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).session.status === "ended");
+      await waitAt("session-end", () => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).session.status === "ended");
       const ended = await page.evaluate(() => localStorage.getItem("xiaoyuji-learning-state-v1"));
       const starts = await page.evaluate(() => window.listeningStarts);
       const count = calls.length;

@@ -11,7 +11,7 @@
         "id": "voice-loop",
         "label": "语音陪伴主链路",
         "focus": ["family", "conversation_ui", "voice_pipeline", "local_server", "qwen_speech", "tutor_orchestrator", "qwen_text"],
-        "note": "分享和纠正跟随本轮文字；明确换题取消旧绘图，告别本地结束并停止收音。异步回复按回合/消息校验，后台不改已说内容。云端语音失败暂停续听。HTTP仍传状态对象，尚无照片输入。"
+        "note": "正式网页仍半双工：只读状态、候选单次接收、后台补全与媒体展示分离。独立voice-lab默认合成测试，显式Qwen模式已验证本机音频、打断与停止，不写家庭档案；漏词与延迟未达标，儿童体验及iPhone锁屏尚未验收。"
       },
       {
         "id": "visual-response",
@@ -23,7 +23,7 @@
         "id": "growth-record",
         "label": "成长记录",
         "focus": ["tutor_orchestrator", "student_memory", "growth_experience", "family"],
-        "note": "补全匹配revision/sessionId；启动先检查档案，损坏时仅提供本机下载与确认恢复。恢复/清空轮换代次，旧页面及旧快照不可写回。仍为同步主存储与整包备用快照，跨标签页原子事务及旧派生数据全面清洗未完成。"
+        "note": "本轮上下文独立，旧画面不自动附档；补全核对revision/sessionId。普通写入经applicationPersistence统一结果及失败提示，保留已保存片段身份。替换/恢复沿用专用流程。同步主存储与整包备用快照不变，跨记录事务及历史清理未完成。"
       }
     ]
   },
@@ -57,7 +57,7 @@
       "id": "voice_pipeline",
       "type": "frontend",
       "label": "连续语音控制",
-      "sublabel": "实时采集 · 流式播报",
+      "sublabel": "会话控制 · 采集与播报",
       "row": 0,
       "col": 2
     },
@@ -81,7 +81,7 @@
       "id": "tutor_orchestrator",
       "type": "backend",
       "label": "Tutor 编排器",
-      "sublabel": "共享安全规则 · 结构校验",
+      "sublabel": "共享规则 · 无档案直写",
       "row": 1,
       "col": 3
     },
@@ -99,7 +99,7 @@
       "label": "育儿知识系统",
       "sublabel": "分龄知识卡 · 太阳事实种子",
       "row": 2,
-      "col": 4
+      "col": 3
     },
     {
       "id": "whiteboard",
@@ -115,7 +115,7 @@
       "label": "Student Memory",
       "sublabel": "代次保护 · 本机备用快照",
       "row": 2,
-      "col": 3
+      "col": 1
     },
     {
       "id": "growth_experience",
@@ -123,7 +123,7 @@
       "label": "成长记录与备份",
       "sublabel": "回看 · 整理 · 恢复",
       "row": 3,
-      "col": 3
+      "col": 1
     }
   ],
   "boundaries": [
@@ -197,7 +197,7 @@
       "id": "orchestrator_returns_structure",
       "from": "tutor_orchestrator",
       "to": "conversation_ui",
-      "label": "回复 · 白板 · 成长证据",
+      "label": "短答 · 受限证据 · 绘图计划",
       "variant": "emphasis"
     },
     {
@@ -210,14 +210,15 @@
       "id": "ui_saves_evidence",
       "from": "conversation_ui",
       "to": "student_memory",
-      "label": "非敏感原话与证据"
+      "label": "本轮原话与关联证据",
+      "labelAt": [334, 280]
     },
     {
       "id": "memory_builds_growth",
       "from": "student_memory",
       "to": "growth_experience",
       "label": "按时间聚合与导出",
-      "labelAt": [778, 470]
+      "labelAt": [334, 414]
     },
     {
       "id": "parent_updates_archive",
@@ -225,9 +226,7 @@
       "to": "student_memory",
       "fromSide": "right",
       "toSide": "right",
-      "via": [[884, 504], [884, 370]],
-      "label": "整理与恢复",
-      "labelAt": [965, 448]
+      "label": "整理与恢复"
     }
   ],
   "cards": [
@@ -237,35 +236,28 @@
       "items": [
         "自动续听；明确告别本地结束并停止收音",
         "短答先播；绘图校验会话和基图后发布",
-        "命中敏感规则后本地回应，跳过文本模型"
+        "命中敏感规则后本地回应，跳过文本模型",
+        "独立LiveKit实验；正式链路仍为半双工"
       ]
     },
     {
       "dot": "emerald",
       "title": "成长记录原则",
       "items": [
-        "敏感求助不归档；操作催促不作成长证据",
+        "本轮证据单独归属；旧画面不自动附档",
         "补全核对片段修订；清空/恢复拒绝旧代次",
-        "损坏先恢复；备用失败可见；JSON手动备份"
+        "损坏先恢复；备用失败可见；JSON手动备份",
+        "账号、多档案、跨设备云同步待接通"
       ]
     },
     {
       "dot": "orange",
       "title": "安全边界",
       "items": [
-        "私有文件不公开；POST同源与有界JSON",
+        "POST同源；文本上下文排除家长码与整库",
         "有限中文规则；ASR音频先到云端再检测",
-        "无自动通知、敏感档案或历史全面脱敏"
-      ]
-    },
-    {
-      "dot": "slate",
-      "title": "未完成与待验收",
-      "items": [
-        "Supabase 自动跨设备同步",
-        "图片有自动复核，编辑质量与独立安全集未通过",
-        "自动音色识别和多孩子档案",
-        "双工插话与生产部署"
+        "无自动通知、敏感档案或历史全面脱敏",
+        "图片质量与独立安全集、生产部署待验收"
       ]
     }
   ]

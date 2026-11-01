@@ -113,7 +113,7 @@ export function parseArchiveBackup(text) {
 }
 
 export function changeArchiveMoment(state, archive, id, changes, remove = false) {
-  if (state.session?.status === "active" || state.llmStatus?.pending) fail("请先结束聊天，再整理记录。");
+  if (state.session?.status === "active") fail("请先结束聊天，再整理记录。");
   const studentId = state.studentModel.studentId;
   const db = normalizeLocalStudentDb(archive);
   const moment = db.growthMoments.find((item) => item.id === id && item.studentId === studentId);

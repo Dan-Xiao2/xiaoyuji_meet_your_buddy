@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "小宇记本机语音实验",
+    "subtitle": "实测Qwen接口与本机WebRTC闭环；默认仍为合成测试，识别和延迟未达标",
+    "locale": "zh-CN",
+    "output": "xiaoyuji-voice-lab.architecture.html",
+    "quality_profile": "showcase"
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [
+      52,
+      72
+    ],
+    "cols": 4,
+    "gapX": 100,
+    "gapY": 96,
+    "cellW": 180,
+    "cellH": 82
+  },
+  "components": [
+    {
+      "id": "adult",
+      "type": "external",
+      "label": "成人实验输入",
+      "sublabel": "合成麦克风 / 手动输入",
+      "row": 0,
+      "col": 0
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "独立语音网页",
+      "sublabel": "房间音频 · 停止 · 临时记录",
+      "row": 0,
+      "col": 1
+    },
+    {
+      "id": "rtc",
+      "type": "backend",
+      "label": "本机 LiveKit",
+      "sublabel": "WebRTC · 音频与控制通道",
+      "row": 0,
+      "col": 2
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "Node AgentSession",
+      "sublabel": "话轮 · CPU VAD · 取消",
+      "row": 1,
+      "col": 2
+    },
+    {
+      "id": "provider",
+      "type": "external",
+      "label": "Qwen 实验服务",
+      "sublabel": "流式 ASR · LLM · PCM TTS",
+      "row": 1,
+      "col": 3
+    },
+    {
+      "id": "rules",
+      "type": "backend",
+      "label": "小宇业务边界",
+      "sublabel": "安全 · 历史筛选 · 能力说明",
+      "row": 2,
+      "col": 2
+    },
+    {
+      "id": "bootstrap",
+      "type": "security",
+      "label": "本机实验会话 API",
+      "sublabel": "同源 · 短凭证 · 房间清理",
+      "row": 1,
+      "col": 0
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "本批可验证",
+      "items": [
+        "真实房间与音频轨道；持续收音",
+        "语音重叠打断；停止与取消传播",
+        "临时事件有会话身份和顺序校验"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "明确的实验边界",
+      "items": [
+        "无家庭档案写入；无真实儿童数据",
+        "默认合成；真实模式漏词与延迟未达标",
+        "iPhone锁屏、大陆网络与儿童体验待验收"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "start",
+      "from": "adult",
+      "to": "web",
+      "label": "开始 / 说话 / 停止"
+    },
+    {
+      "id": "media",
+      "from": "web",
+      "to": "rtc",
+      "label": "双向音频 · 控制事件"
+    },
+    {
+      "id": "rtc_agent",
+      "from": "rtc",
+      "to": "agent",
+      "label": "订阅输入 · 发布回应",
+      "labelDy": 24
+    },
+    {
+      "id": "pipeline",
+      "from": "agent",
+      "to": "provider",
+      "label": "实时音频与短回答"
+    },
+    {
+      "id": "business",
+      "from": "agent",
+      "to": "rules",
+      "label": "回应前检查 · 有限上下文",
+      "labelDy": 24
+    },
+    {
+      "id": "grant",
+      "from": "web",
+      "to": "bootstrap",
+      "label": "同意 · 获取房间凭证"
+    }
+  ]
+}

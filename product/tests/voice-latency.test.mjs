@@ -109,7 +109,7 @@ test('model deadline covers a stalled response body, and client cancellation rea
     const abort=new AbortController();
     const waiting=createTutorTurnWithQwen('我喜欢画画',createInitialState(),{signal:abort.signal});
     abort.abort();
-    await waiting;
+    await assert.rejects(waiting, { name: 'AbortError' });
     assert.equal(upstreamAborted,true);
   } finally {
     globalThis.fetch=originalFetch;

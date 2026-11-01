@@ -3,16 +3,25 @@ import assert from "node:assert/strict";
 import { createConversationController } from "../src/features/conversation/conversationController.js";
 import { captureEnrichmentBaseline } from "../src/session/enrichmentState.js";
 import { findTutorMessage } from "../src/features/conversation/conversationState.js";
-import { applyConversationCommit } from "../src/features/conversation/conversationCommit.js";
 
 // Model the application's receive boundary so existing race tests inspect accepted state.
 async function runConversation(controller, args) {
-  let live = args.localTurn;
-  const getState = () => args.getState?.() ?? live;
+  let live = { ...args.localTurn, messages: args.localTurn.messages.slice(0, -2) };
+  let published = false;
+  const getState = () => published ? (args.getState?.() ?? live) : {
+    ...(args.getState?.() ?? live), messages: live.messages
+  };
   const outcome = await controller.run({ ...args, getState,
-    onPending: next => { live = next; args.onPending?.(next); },
+    onPending: commit => {
+      const applied = controller.accept(args.turn, getState(), commit);
+      if (!applied.accepted) return false;
+      live = applied.state;
+      args.onPending?.(live);
+      published = true;
+      return getState();
+    },
     onQuickReply: async (commit, meta) => {
-      const applied = applyConversationCommit(getState(), commit);
+      const applied = controller.accept(args.turn, getState(), commit);
       if (!applied.accepted) return false;
       live = applied.state;
       const accepted = await args.onQuickReply?.(live, meta);
@@ -22,8 +31,9 @@ async function runConversation(controller, args) {
   });
   assert.equal(Object.hasOwn(outcome, "state"), false);
   if (!outcome.commit) return outcome;
-  const applied = applyConversationCommit(getState(), outcome.commit);
+  const applied = controller.accept(args.turn, getState(), outcome.commit);
   assert.equal(applied.accepted, true);
+  controller.settle(args.turn, true, outcome.status);
   return { ...outcome, state: applied.state,
     enrichmentConflicts: [...(outcome.enrichmentConflicts || []), ...applied.conflicts] };
 }
@@ -32,7 +42,7 @@ function baseState() {
   return {
     profile: { name: "焘焘" },
     family: { activeSpeakerId: "child-1" },
-    session: { id: "session-1", turnCount: 0 },
+    session: { id: "session-1", status: "active", turnCount: 0 },
     messages: [{ role: "child", text: "画一座房子" }, { role: "tutor", text: "本地回答" }],
     board: { type: "blank" },
     memory: { interests: [] },
@@ -47,7 +57,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-test("quick reply updates its own message, not a later unrelated tutor message", async () => {
+test("quick reply is inserted after its child, preserving a later unrelated tutor message", async () => {
   const quick = deferred();
   let live = baseState();
   const controller = createConversationController({ quickApi: () => quick.promise });
@@ -61,14 +71,15 @@ test("quick reply updates its own message, not a later unrelated tutor message",
   quick.resolve({ reply: "本轮回答", llmStatus: { used: false } });
   const result = await pending;
   assert.equal(result.state.messages.at(-1).text, "另一条消息");
-  assert.equal(result.state.messages.find(message => message.id === target.id).text, "本轮回答");
+  assert.equal(result.state.messages.find(message => message.id === `${target.turnId}:tutor`).text, "本轮回答");
+  assert.equal(result.state.messages.find(message => message.id === target.id).text, "画一座房子");
   assert.ok(target.turnId);
-  assert.equal(result.replyMessageId, target.id);
+  assert.equal(result.replyMessageId, `${target.turnId}:tutor`);
 });
 
 for (const stage of ["quick", "enrichment"]) {
   for (const change of ["remove", "edit"]) {
-    test(`${stage} discards a result after target ${change}`, async () => {
+    test(`${stage} discards a result after ${stage === "quick" ? "source" : "reply"} ${change}`, async () => {
       const delayed = deferred();
       const started = deferred();
       let live = baseState();
@@ -85,7 +96,7 @@ for (const stage of ["quick", "enrichment"]) {
       });
       await started.promise;
       live = { ...live, messages: change === "remove" ? live.messages.slice(0, -1)
-        : live.messages.map(message => message.role === "tutor" ? { ...message, text: "修订后的消息" } : message) };
+        : live.messages.map(message => message.role === (stage === "quick" ? "child" : "tutor") ? { ...message, text: "修订后的消息" } : message) };
       delayed.resolve({ reply: "旧回复", llmStatus: { used: true }, growthEvidence: { shouldSave: true } });
       assert.equal((await pending).status, "cancelled");
       assert.equal(delivered, stage === "quick" ? 0 : 1);
@@ -294,9 +305,10 @@ test("conversation controller preserves the spoken reply and protected app owner
   assert.equal(result.state.messages.at(-1).text, "好，我们画一座有红屋顶的房子。");
   assert.equal(result.state.profile, state.profile);
   assert.equal(result.state.family, state.family);
-  assert.deepEqual(result.state.session, { id: "session-1", turnCount: 1 });
+  assert.deepEqual(result.state.session, { id: "session-1", status: "active", turnCount: 1 });
   assert.deepEqual(result.state.memory.interests, ["房子"]);
-  assert.equal(result.state.llmStatus.stage, "complete");
+  assert.equal(controller.getSnapshot().phase, "complete");
+  assert.equal(result.state.llmStatus.stage, undefined);
 });
 
 test("a newer turn cancels a late quick reply from the previous turn", async () => {

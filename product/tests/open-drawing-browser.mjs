@@ -1,3 +1,4 @@
+import { waitForConversationPhase } from "./helpers/runtimeDiagnostics.mjs";
 import assert from "node:assert/strict";
 import { createInitialState } from "../src/data/studentModel.js";
 import { createInitialFamily } from "../src/data/familyModel.js";
@@ -95,7 +96,7 @@ try {
     available = true; failure = false; delay = true; release = null;
     await send("加上草地");
     await page.getByText("正在画，你可以继续说话", { exact: true }).waitFor();
-    await page.waitForFunction(() => !JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).llmStatus?.pending);
+    await waitForConversationPhase(page, "complete");
     await page.locator("#endChildSession").click();
     release?.();
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("xiaoyuji-learning-state-v1")).session.status !== "active");

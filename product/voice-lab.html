@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>小宇记 · 语音实验</title><link rel="stylesheet" href="/src/styles/design-system.css"><link rel="stylesheet" href="/src/voice-lab/style.css"></head>
+<body><main class="voice-lab">
+  <a href="/">返回小宇记</a><h1>和小宇聊一聊</h1>
+  <p>成人语音实验。当前入口不连接家庭档案，本次文字仅在页面内显示。</p>
+  <p id="mode" role="status">正在检查连接条件…</p>
+  <label>对话年龄段 <select id="age"><option value="3-4">3–4岁</option><option value="4-5" selected>4–5岁</option><option value="5-6">5–6岁</option></select></label>
+  <label class="consent"><input type="checkbox" id="consent">我已了解：开始后麦克风音频会发送到实验语音服务。</label>
+  <button id="start" class="primary-button" disabled>开始聊天</button>
+  <button id="stop" class="text-button" disabled>结束聊天</button>
+  <button id="interrupt" class="text-button" disabled>停一下</button>
+  <p id="state" role="status" aria-live="polite">尚未开始</p>
+  <div id="audio"></div>
+  <details><summary>辅助文字与实验记录</summary>
+    <form id="textForm"><label>输入一句话 <input id="text" maxlength="1000" autocomplete="off"></label><button id="send" class="text-button" disabled>发送</button></form>
+    <p>“生成”表示回答已产生；播放记录来自SDK估算，不能证明用户实际听到了逐字内容。打断后的估算回答不送入下一轮模型上下文。</p>
+    <ol id="events" aria-label="本次实验记录"></ol>
+  </details>
+  <p id="error" role="alert" hidden></p>
+</main><script type="module" src="/src/voice-lab/client.bundle.js"></script></body></html>

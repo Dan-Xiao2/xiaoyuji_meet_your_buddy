@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import { readFile } from "node:fs/promises";
 import { extname, isAbsolute, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createVoiceLab } from "./voiceLab.mjs";
 import { loadLocalEnv } from "./env.mjs";
 import { createQuickTutorReplyWithQwen, createTutorTurnWithQwen } from "./qwenTutor.mjs";
 import { getSpeechStatus, synthesizeSpeech, transcribeAudio } from "./qwenSpeech.mjs";
@@ -11,6 +12,7 @@ import { openSpeechStream } from "./speechStream.mjs";
 import { planDrawingWithQwen } from "./drawingPlanner.mjs";
 import { attachRealtimeAsr, realtimeAsrConfig } from "./realtimeAsr.mjs";
 import { routeOpenDrawing, generateOpenDrawing } from "./openDrawing.mjs";
+import { createTutorContext, tutorEnrichmentResult } from "../src/services/tutorContext.js";
 
 const root = normalize(join(fileURLToPath(new URL(".", import.meta.url)), ".."));
 loadLocalEnv(root);
@@ -29,7 +31,7 @@ const publicPrefixes = [
   "/src/", "/assets/", "/design-drafts/",
   "/node_modules/motion/", "/node_modules/roughjs/", "/node_modules/konva/", "/node_modules/lucide/"
 ];
-const publicFiles = new Set(["/index.html", "/docs/architecture/xiaoyuji-runtime.architecture.html"]);
+const publicFiles = new Set(["/index.html", "/voice-lab.html", "/docs/architecture/xiaoyuji-runtime.architecture.html"]);
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -42,6 +44,7 @@ const mime = {
   ".json": "application/json; charset=utf-8"
 };
 
+const voiceLab = createVoiceLab();
 let imageRequests = 0;
 export const server = createServer((request, response) => {
   handleRequest(request, response).catch((error) => {
@@ -58,6 +61,15 @@ async function handleRequest(request, response) {
 
   if (request.method === "POST" && pathname.startsWith("/api/") && !isSameOrigin(request)) {
     throw new RequestError(403, "forbidden");
+  }
+
+  if (pathname.startsWith("/api/voice-lab/")) {
+    if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress)) throw new RequestError(403, "local-lab-only");
+    if (request.method === "GET" && pathname === "/api/voice-lab/status") return sendJson(response, 200, voiceLab.status());
+    if (request.method !== "POST" || !["/api/voice-lab/start", "/api/voice-lab/stop"].includes(pathname)) throw new RequestError(404, "not-found");
+    const body = await readJson(request, 2048);
+    const result = await (pathname.endsWith("/start") ? voiceLab.start(body) : voiceLab.stop(body));
+    return sendJson(response, result.status, result.data);
   }
 
   if (request.method === "POST" && ["/api/whiteboard/route", "/api/whiteboard/image"].includes(pathname)) {
@@ -165,8 +177,10 @@ async function handleRequest(request, response) {
       const body = await readJson(request, limits.tutor);
       requireString(body.input, "input", 4000);
       requireObject(body.state, "state");
-      const nextState = await createTutorTurnWithQwen(body.input, body.state, { signal: abort.signal, spokenReply: body.spokenReply });
-      if (!response.destroyed) sendJson(response, 200, nextState);
+      // Background extraction cannot assess a lesson or return a replacement app state.
+      const context = { ...createTutorContext(body.state), activeLesson: null };
+      const nextState = await createTutorTurnWithQwen(body.input, context, { signal: abort.signal, spokenReply: body.spokenReply });
+      if (!response.destroyed) sendJson(response, 200, tutorEnrichmentResult(nextState));
     } finally {
       abort.abort();
     }
@@ -180,7 +194,7 @@ async function handleRequest(request, response) {
       const body = await readJson(request, limits.tutor);
       requireString(body.input, "input", 4000);
       requireObject(body.state, "state");
-      const result = await createQuickTutorReplyWithQwen(body.input, body.state, body.fallbackReply || "", { signal: abort.signal });
+      const result = await createQuickTutorReplyWithQwen(body.input, createTutorContext(body.state), body.fallbackReply || "", { signal: abort.signal });
       if (!response.destroyed) sendJson(response, 200, result);
     } finally {
       abort.abort();

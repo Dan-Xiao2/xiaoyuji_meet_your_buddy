@@ -14,10 +14,15 @@ const tests = [
   "tests/archive-durability-browser.mjs",
   "tests/production-design-browser.mjs",
   "tests/conversation-consistency-browser.mjs",
+  "tests/conversation-candidate-browser.mjs",
+  "tests/runtime-state-browser.mjs",
   "tests/exploration-pipeline-browser.mjs",
   "tests/child-safety-browser.mjs",
+  "tests/drawing-browser.mjs",
+  "tests/whiteboard-browser.mjs",
   "tests/open-drawing-browser.mjs",
-  "tests/drawing-races-browser.mjs"
+  "tests/drawing-races-browser.mjs",
+  "tests/interaction-stop-browser.mjs"
 ];
 
 let chromium;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { server } from "../server/server.mjs";
+import { createInitialState } from "../src/data/studentModel.js";
 
 let origin;
 
@@ -69,4 +70,27 @@ test("oversized and structurally invalid API bodies stop before model calls", as
   });
   assert.equal(missingState.status, 400);
   assert.equal((await missingState.json()).reason, "invalid-state");
+});
+
+test("tutor HTTP boundary returns evidence fields only, even for a legacy whole-state request", async () => {
+  const previous = process.env.TUTOR_ENABLE_LLM;
+  process.env.TUTOR_ENABLE_LLM = "false";
+  try {
+    const state = createInitialState();
+    state.profile.parentPinHash = "private-pin-sentinel";
+    state.family.privateNote = "private-family-sentinel";
+    state.messages = [null, { role: "child", text: "我看到一朵花" }];
+    const response = await fetch(origin + "/api/tutor", {
+      method: "POST", headers: { Origin: origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ input: "我看到一朵花", state, spokenReply: "我们一起看看。" })
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.ok(Object.keys(result).every(key => ["memory", "growthEvidence", "llmStatus"].includes(key)));
+    assert.doesNotMatch(JSON.stringify(result), /private-/);
+    assert.equal(result.studentModel, undefined);
+  } finally {
+    if (previous === undefined) delete process.env.TUTOR_ENABLE_LLM;
+    else process.env.TUTOR_ENABLE_LLM = previous;
+  }
 });

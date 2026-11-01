@@ -1,18 +1,22 @@
 import { createInitialState } from "./data/studentModel.js";
 import { createAppStore } from "./app/appStore.js";
-import { normalizeApplicationState } from "./app/applicationState.js";
+import { createApplicationPersistence } from "./app/applicationPersistence.js";
+import { updateProfileState, startSessionState, endSessionState, normalizeApplicationState } from "./app/applicationState.js";
+import { runtimeDiagnostics } from "./app/runtimeDiagnostics.js";
+import { createDrawingRequestTracker } from "./features/drawing/drawingRequestTracker.js";
+import { captureGrowthTurnContext } from "./features/growth/growthTurnContext.js";
 import { APP_EVENT } from "./app/appEvents.js";
 import { callDrawingPlanApi } from "./services/llmClient.js";
 import { createConversationTurn as createTutorTurn } from "./services/tutorEngine.js";
 import { checkChildSafety, checkTutorSafetyOutput, createSafetyTurn } from "./services/safety.js";
-import { loadState, saveState, exportState, exportConversationMoments, clearState } from "./services/storage.js";
+import { loadState, exportState, exportConversationMoments, clearState } from "./services/storage.js";
 import { renderMessages } from "./ui/chat.js";
 import { renderWhiteboard, presentWhiteboardStep, replayWhiteboard, stopWhiteboardPlayback, prepareWhiteboardPlayback } from "./ui/whiteboard.js";
 import { relevantBoard, validVisualScene } from "./whiteboard/visualPlan.js";
 import { validImageBoard, imageBoard, undoImageBoard, createDrawingJob, drawingRequestInput } from "./whiteboard/openDrawing.js";
 import { isDrawingRetry, isInteractionControl, conversationEndReply, isTopicChange, topicChangeDrawingInput } from "./services/conversationIntent.js";
 import { routeDrawing, snapshotDrawing, requestImage } from "./services/openDrawingClient.js";
-import { createVoiceUiState, getVoiceStageLayout, shouldFinishVoiceOnRelease } from "./ui/voiceState.js";
+import { deriveVoiceUiState, getVoiceStageLayout, shouldFinishVoiceOnRelease } from "./ui/voiceState.js";
 import { renderMemoryArchive, renderMemoryDashboard } from "./ui/memoryPanel.js";
 import { mountArchiveControls } from "./ui/archiveControls.js";
 import { mountMicrophoneSettings } from "./ui/microphoneSettings.js";
@@ -22,28 +26,20 @@ import { renderAdultSummary, renderParentTimeline } from "./ui/summary.js";
 import { renderOfflineTask } from "./ui/offlineTask.js";
 import { createParentNoteText } from "./ui/parentNote.js";
 import { applyOfflineObservation, createObservationSummary } from "./student/offlineObservationUpdater.js";
-import { ensureStudentModel, migrateStudentModel } from "./student/studentSchema.js";
+import { migrateStudentModel } from "./student/studentSchema.js";
 import {
-  createActiveSession,
   createIdleSession,
-  endActiveSession,
   incrementSessionTurn
 } from "./session/sessionManager.js";
+import { createVoiceSession } from "./features/voice/voiceSession.js";
 import { createConversationController } from "./features/conversation/conversationController.js";
-import { findTutorMessage, latestTutorReply, replaceLatestTutorReply } from "./features/conversation/conversationState.js";
-import { applyConversationCommit } from "./features/conversation/conversationCommit.js";
+import { findTutorMessage, latestTutorReply, replaceLatestTutorReply, cancelPendingConversationState, recoverInterruptedConversationState } from "./features/conversation/conversationState.js";
 import { createDrawingGuard, mergeDrawingTurn, retainUpdatedDrawing, drawingContinuationBaseline } from "./features/drawing/drawingState.js";
 import { captureEnrichmentBaseline } from "./session/enrichmentState.js";
 import {
-  appendStudentEvent,
   clearLocalStudentDb,
-  finishStudentSession,
   getStudentGrowthMoments,
-  loadLocalStudentDb,
-  persistStudentModel,
-  recordGrowthMoment,
-  startStudentSession,
-  setGrowthMomentsStarred
+  loadLocalStudentDb
 } from "./data/localStudentDb.js";
 import { domainLabel } from "./data/growthInsights.js";
 import { syncLegacyMemory } from "./student/memoryUpdater.js";
@@ -57,8 +53,7 @@ import {
   familyRoleLabel,
   getActiveSpeaker,
   removeFamilyMember,
-  setActiveSpeaker,
-  syncPrimaryChild
+  setActiveSpeaker
 } from "./data/familyModel.js";
 
 const UI_STATE_VERSION = 4;
@@ -144,11 +139,16 @@ const dom = {
 
 let state = hydrateState(loadState());
 const appStore = createAppStore(state, { normalize: normalizeApplicationState });
+state = appStore.getState();
+const persistence = createApplicationPersistence({
+  onFailure: () => { document.querySelector("#storageWarning").hidden = false; }
+});
 const voice = createVoiceController();
-const conversation = createConversationController();
+const trace = runtimeDiagnostics.record;
+const conversation = createConversationController({ trace, onChange: requestVoiceRender });
+const drawingRequests = createDrawingRequestTracker({ trace, onChange: requestVoiceRender });
 let voiceCloudStatus = null;
-let isVoiceActive = false;
-const drawingJob = createDrawingJob();
+const drawingJob = createDrawingJob({ trace });
 const drawingGuard = createDrawingGuard();
 let drawingPending = false;
 let pendingDrawingBase = null;
@@ -162,7 +162,7 @@ function cancelOpenDrawing() {
   drawingJob.cancel(); drawingPending = false; pendingDrawingBase = null; drawingStatus();
 }
 
-function startOpenDrawing(route, previous) {
+function startOpenDrawing(route, previous, turn) {
   const base = drawingGuard.capture(state);
   cancelOpenDrawing(); drawingPending = true; pendingDrawingBase = previous;
   drawingStatus("正在画，你可以继续说话");
@@ -172,25 +172,21 @@ function startOpenDrawing(route, previous) {
     drawingPending = false; pendingDrawingBase = null;
     if (!drawingGuard.matches(state, base)) {
       drawingStatus(state.session?.status === "active" ? "画面已更新，这次生成的图没有替换当前画面" : "");
-      return;
+      return false;
     }
-    state.board = imageBoard(image, previous, route.instruction);
-    state.visualPlan = null;
-    state.drawingRequest = null;
+    state = { ...state, board: imageBoard(image, previous, route.instruction), visualPlan: null, drawingRequest: null };
     drawingStatus("图画来了");
     commitState();
+    return true;
   }, () => {
     drawingPending = false; pendingDrawingBase = null;
     if (state.session?.id !== base.sessionId || state.session?.status !== "active") return;
     drawingStatus(drawingGuard.matches(state, base)
       ? "这次没画出来，原来的画没有改动" : "这次没画出来，当前画面保留不变");
-  });
+  }, { sessionId: base.sessionId, baseRevision: base.revision, turnId: turn.turnId });
 }
-let narrationId = 0;
-let speechReplyMessageId = null;
-let voiceTurnStartedAt = null;
 const recentVoiceTimings = [];
-let voiceUiState = createVoiceUiState("ready");
+let voiceRenderQueued = false;
 let parentUnlockedUntil = 0;
 let pendingParentAction = null;
 let mobileDrawerTimer = null;
@@ -201,13 +197,47 @@ let listeningAnimations = [];
 let hasLiveVoiceLevel = false;
 let voicePressStartedAt = 0;
 let voicePointerStopsExisting = false;
-let handsFreeConversationActive = false;
-let autoListenTimer = null;
-const microphoneSettings = mountMicrophoneSettings({ beforeCapture: () => {
-  conversation.cancel();
-  state.llmStatus = { ...state.llmStatus, pending: false, enrichmentPending: false };
-  pauseHandsFreeConversation({});
-} });
+const microphoneSettings = mountMicrophoneSettings({ beforeCapture: () => stopInteraction() });
+const voiceSession = createVoiceSession({
+  voice, trace, onChange: requestVoiceRender,
+  getContext: () => ({
+    sessionId: state.session?.id,
+    active: state.session?.status === "active",
+    canListen: dom.workspace.dataset.activeView === "learn" && !document.hidden,
+    pending: conversation.getSnapshot().awaitingReply || drawingRequests.getSnapshot().phase === "pending",
+    cloudTranscription: voiceCloudStatus?.cloudTranscription,
+    realtimeTranscription: voiceCloudStatus?.realtimeTranscription
+  }),
+  ui: {
+    beforeListen: () => microphoneSettings.reset(),
+    captureStart: (details) => {
+      microphoneSettings.noteConversationInput(details.inputLabel);
+      dom.voiceTranscript.textContent = details.mode === "recording" ? "说完会自动处理，也可以再点一下结束。" : "请慢慢说一句话。";
+    },
+    transcript: text => { dom.voiceTranscript.textContent = text; },
+    captureError: message => {
+      dom.voiceTranscript.textContent = message;
+    },
+    clearSpeechError: () => { document.querySelector("#speechFailure").hidden = true; },
+    speechError: replyMessageId => {
+      document.querySelector("#speechFailureText").textContent = findTutorMessage(state, replyMessageId)?.text || "";
+      document.querySelector("#speechFailure").hidden = false;
+    }
+  },
+  narration: {
+    stop: () => stopWhiteboardPlayback(dom.whiteboard),
+    prepare: () => prepareWhiteboardPlayback(dom.whiteboard),
+    step: index => presentWhiteboardStep(dom.whiteboard, index),
+    replay: () => replayWhiteboard(dom.whiteboard)
+  },
+  onInput: (text, source) => { dom.childInput.value = text; sendChildInput(text, source); },
+  onTiming: recordVoiceTiming,
+  onLevel: applyVoiceLevel
+});
+runtimeDiagnostics.register("conversation", conversation.getSnapshot);
+runtimeDiagnostics.register("drawingPlan", drawingRequests.getSnapshot);
+runtimeDiagnostics.register("drawingImage", drawingJob.getSnapshot);
+runtimeDiagnostics.register("media", voiceSession.getSnapshot);
 const archiveControls = mountArchiveControls({
   getState: () => state,
   requestAccess: requestParentAccess,
@@ -222,14 +252,28 @@ const archiveControls = mountArchiveControls({
   }
 });
 
-function applyReplacedArchive(nextState, view) {
-  cancelOpenDrawing();
+// Invalidate business work before stopping media, so no late result can start a new playback.
+function stopInteraction({ detail = "点一下小宇，继续聊", persist = true } = {}) {
+  trace("interaction.stopped", { sessionId: state.session?.id });
   conversation.cancel();
-  pauseHandsFreeConversation({ detail: "" });
+  cancelOpenDrawing();
+  voiceSession.pause({ detail });
   microphoneSettings.reset();
+  voicePressStartedAt = 0;
+  voicePointerStopsExisting = false;
+  const nextState = cancelPendingConversationState(state);
+  if (nextState !== state) {
+    state = nextState;
+    if (persist) commitState(state, { type: APP_EVENT.INTERACTION_STOPPED });
+  }
+}
+
+function applyReplacedArchive(nextState, view) {
+  // Archive replacement has already rotated the storage generation. Never save the old state here.
+  stopInteraction({ detail: "", persist: false });
   state = nextState;
   syncProfileForm();
-  setVoicePhase("ready");
+  renderVoiceState();
   commitState();
   switchView(view);
 }
@@ -243,15 +287,31 @@ function showDurableArchiveWarning(result) {
 subscribeDurableArchive(showDurableArchiveWarning);
 showDurableArchiveWarning(getDurableArchiveStatus());
 
-function setVoicePhase(phase, options = {}) {
+function requestVoiceRender() {
+  if (voiceRenderQueued) return;
+  voiceRenderQueued = true;
+  queueMicrotask(() => { voiceRenderQueued = false; renderVoiceState(); });
+}
+
+function renderVoiceState() {
   const speaker = getActiveSpeaker(state.family, state.profile);
-  voiceUiState = createVoiceUiState(phase, { name: speaker?.name || state.profile?.name, ...options });
+  const media = voiceSession.getSnapshot();
+  const voiceUiState = deriveVoiceUiState({ active: state.session?.status === "active",
+    visible: dom.workspace.dataset.activeView === "learn" && !document.hidden,
+    media, conversation: conversation.getSnapshot(), drawingPlan: drawingRequests.getSnapshot()
+  }, { name: speaker?.name || state.profile?.name });
   dom.voicePromptTitle.textContent = voiceUiState.title;
   dom.voicePromptDetail.textContent = voiceUiState.detail;
   dom.voiceStatus.textContent = voiceUiState.status;
   dom.mainVoiceButton.setAttribute("aria-label", voiceUiState.ariaLabel);
   dom.mainVoiceButton.disabled = voiceUiState.phase === "thinking";
   dom.mainVoiceButton.closest(".child-voice-dock").dataset.voicePhase = voiceUiState.phase;
+  const listening = voiceUiState.phase === "listening";
+  if (dom.mainVoiceButton.classList.contains("is-listening") !== listening) {
+    dom.mainVoiceButton.classList.toggle("is-listening", listening);
+    if (listening) startListeningMotion(); else stopListeningMotion();
+  }
+  dom.connectionStatus.textContent = createConnectionStatusText();
 }
 
 function startListeningMotion() {
@@ -276,7 +336,7 @@ function startListeningMotion() {
 }
 
 function applyVoiceLevel(level) {
-  if (!isVoiceActive || !Number.isFinite(level)) return;
+  if (voiceSession.getSnapshot().input !== "capturing" || !Number.isFinite(level)) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (!dom.xiaoyuTalkVisual || !dom.xiaoyuListeningShadow) return;
 
@@ -309,6 +369,7 @@ function stopListeningMotion() {
 function hydrateState(savedState) {
   const freshState = createInitialState();
   if (!savedState) return freshState;
+  savedState = recoverInterruptedConversationState(savedState);
   const resetVisualSession = savedState.uiVersion !== UI_STATE_VERSION;
   const profile = migrateLegacyProfile(savedState.profile, savedState.uiVersion);
   const studentModel = migrateStudentModel(savedState.studentModel || freshState.studentModel, profile);
@@ -381,14 +442,13 @@ function render() {
   dom.mobileDrawerProfile.textContent = state.profile.configured
     ? `${state.family.members.length || 1} 位家人 · ${state.profile.name}`
     : "第一次使用，请大人先设置";
-  setVoicePhase(voiceUiState.phase, { detail: voiceUiState.phase === "ready" ? voiceUiState.detail : undefined });
+  renderVoiceState();
 }
 
 appStore.subscribe((nextState) => {
   state = nextState;
   drawingGuard.observe(state.board);
-  try { saveState(state); }
-  catch { document.querySelector("#storageWarning").hidden = false; }
+  persistence.saveSnapshot(state);
   render();
 });
 
@@ -542,9 +602,10 @@ function renderParentHeading() {
 }
 
 function createConnectionStatusText() {
-  if (state.llmStatus?.pending) return "正在想一想";
-  if (state.llmStatus?.used) return "小宇已回应";
-  if (state.llmStatus?.fallback) return "先用小白板回应";
+  const task = conversation.getSnapshot();
+  if (task.awaitingReply || drawingRequests.getSnapshot().phase === "pending") return "正在想一想";
+  if (task.phase === "failed" && !task.replyAccepted) return "回应暂未完成";
+  if (task.replyAccepted || ["complete", "protected"].includes(task.phase)) return "小宇已回应";
   return "可以开始";
 }
 
@@ -583,39 +644,27 @@ function saveOfflineObservation() {
   const studentModel = applyOfflineObservation(state.studentModel, state.offlineTask, observation);
   const observationSummary = createObservationSummary(observation, state.offlineTask);
 
-  persistStudentModel(studentModel);
-  appendStudentEvent(studentModel.studentId, "lesson_completed", {
-    source: "offline_observation",
-    taskId: state.offlineTask.id,
-    observation
-  });
+  const saved = persistence.saveObservation({ ...state, studentModel }, state.offlineTask.id, observation);
+  if (!saved.ok) return;
 
-  state.studentModel = studentModel;
-  state.memory = syncLegacyMemory(state.memory, studentModel);
-  state.lastOfflineObservation = observationSummary;
-  state.offlineTask = {
-    ...state.offlineTask,
-    status: "observed",
-    lastObservedAt: observationSummary.createdAt
-  };
+  state = { ...state, studentModel, memory: syncLegacyMemory(state.memory, studentModel),
+    lastOfflineObservation: observationSummary,
+    offlineTask: { ...state.offlineTask, status: "observed", lastObservedAt: observationSummary.createdAt } };
+  commitState();
+  if (!persistence.isSnapshotSaved(state)) return;
   dom.observationForm.observationNotes.value = "";
   dom.observationDrawer.open = false;
-  commitState();
 }
 
-async function sendChildInput(text) {
+async function sendChildInput(text, source = {}) {
   const cleanText = text.trim();
   if (!cleanText || state.session?.status !== "active") return;
   if (!drawingPending) drawingStatus();
   const speaker = getActiveSpeaker(state.family, state.profile);
 
-  const turn = conversation.begin();
-  voice.stopSpeaking();
-  narrationId++;
-  stopWhiteboardPlayback(dom.whiteboard);
-  voice.stopListening();
-  isVoiceActive = false;
-  clearAutoListenTimer();
+  const turn = conversation.begin({ sessionId: state.session.id, captureRevision: source.captureRevision });
+  state = cancelPendingConversationState(state);
+  voiceSession.prepareTurn();
   const turnSignal = turn.signal;
   const drawingBase = drawingGuard.capture(state);
   const evidenceBaseline = captureEnrichmentBaseline(state);
@@ -628,6 +677,8 @@ async function sendChildInput(text) {
       ...state.messages,
       {
         role: "child",
+        id: `${turn.turnId}:child`,
+        turnId: turn.turnId,
         text: cleanText,
         speakerId: speaker?.id || "",
         speakerName: speaker?.name || state.profile.name || "家人",
@@ -639,13 +690,17 @@ async function sendChildInput(text) {
 
   const drawingInput = drawingRequestInput(cleanText, stateForRequest);
   const retryDrawing = isDrawingRetry(cleanText);
-  let localTurn = createTutorTurn(drawingInput || cleanText, stateForRequest);
+  const localStudentEvents = [];
+  let localTurn = createTutorTurn(drawingInput || cleanText, stateForRequest, {
+    onStudentEvent: (...event) => localStudentEvents.push(event)
+  });
   if (localTurn.safetyDecision?.protected) {
     cancelOpenDrawing();
     localTurn.drawingRequest = null;
     state = localTurn;
     dom.childInput.value = "";
     commitState();
+    conversation.settle(turn, true, "protected");
     speakLatestTutorReply();
     return;
   }
@@ -675,14 +730,23 @@ async function sendChildInput(text) {
       visualPlan: { changed: Boolean(previous) } }, previous ? "回到上一幅了。" : "已经是最开始的这幅了。");
   } else if ((!isTopicChange(cleanText) || topicChangeDrawingInput(cleanText)) && (retryDrawing || localTurn.visualPlan?.needsPlanner || (!localTurn.visualPlan && stateForRequest.drawingRequest?.sessionId === stateForRequest.session?.id && stateForRequest.drawingRequest) || (!localTurn.visualPlan && validImageBoard(stateForRequest.board)) ||
       (!localTurn.visualPlan && stateForRequest.board?.scene?.kind === "illustration"))) {
-    state = { ...state, messages: stateForRequest.messages, llmStatus: { pending: true, stage: "drawing-route" } };
-    setVoicePhase("thinking"); commitState();
+    state = { ...state, messages: stateForRequest.messages };
+    renderVoiceState(); commitState();
     const pendingRequest = stateForRequest.drawingRequest?.sessionId === stateForRequest.session?.id ? stateForRequest.drawingRequest?.input : undefined;
-    const route = await routeDrawing(drawingInput, stateForRequest.board, stateForRequest.messages, turnSignal, pendingRequest);
+    const request = drawingRequests.begin(turn, drawingBase, "route");
+    let route;
+    try { route = await routeDrawing(drawingInput, stateForRequest.board, stateForRequest.messages, turnSignal, pendingRequest); }
+    catch {
+      drawingRequests.finish(request, "request-failed");
+      conversation.settle(turn, false, request.stage, "request-failed");
+      return;
+    }
+    drawingRequests.finish(request, isLiveTurn() ? null : "stale-turn");
     if (!isLiveTurn()) return;
     localTurn = mergeDrawingTurn(state, localTurn, evidenceBaseline);
     const boardChanged = !drawingGuard.matches(state, drawingBase);
     if (boardChanged && route.mode !== "chat" && route.mode !== "clarify") {
+      trace("drawing.rejected", { ...request, reason: "base-changed" });
       localTurn = retainUpdatedDrawing(state, localTurn);
     } else {
       localTurn.drawingRequest = { input: drawingInput, sessionId: stateForRequest.session?.id };
@@ -714,20 +778,29 @@ async function sendChildInput(text) {
   }
   const fallbackReply = latestTutorReply(localTurn);
   if (localTurn.visualPlan?.needsPlanner) {
-    state = { ...state, messages: stateForRequest.messages, llmStatus: { pending: true, stage: "drawing-plan" } };
+    state = { ...state, messages: stateForRequest.messages };
     dom.childInput.value = "";
-    setVoicePhase("thinking");
+    renderVoiceState();
     commitState();
-    const planned = await callDrawingPlanApi({ input: drawingInput, state: stateForRequest }, { signal: turnSignal });
+    const request = drawingRequests.begin(turn, drawingBase, "plan");
+    let planned;
+    try { planned = await callDrawingPlanApi({ input: drawingInput, state: stateForRequest }, { signal: turnSignal }); }
+    catch {
+      drawingRequests.finish(request, "request-failed");
+      conversation.settle(turn, false, request.stage, "request-failed");
+      return;
+    }
+    drawingRequests.finish(request, isLiveTurn() ? null : "stale-turn");
     if (!isLiveTurn()) return;
     localTurn = mergeDrawingTurn(state, localTurn, evidenceBaseline);
     if (!drawingGuard.matches(state, drawingBase)) {
+      trace("drawing.rejected", { ...request, reason: "base-changed" });
       localTurn = retainUpdatedDrawing(state, localTurn);
     } else if (planned?.plan) {
       localTurn = replaceLatestTutorReply({ ...localTurn, visualPlan: planned.plan,
         board: planned.plan.board, llmStatus: planned.llmStatus }, planned.plan.reply);
     } else {
-      localTurn.llmStatus = planned?.llmStatus || { provider: "qwen", used: false, fallback: true, stage: "drawing-plan" };
+      localTurn.llmStatus = planned?.llmStatus || { provider: "qwen", used: false, fallback: true };
     }
   }
   if (localTurn.visualPlan) {
@@ -738,17 +811,37 @@ async function sendChildInput(text) {
     }
     if (localTurn.visualPlan.changed && !validImageBoard(localTurn.board)) cancelOpenDrawing();
     state = mergeDrawingTurn(state, localTurn, evidenceBaseline);
-    state.llmStatus = { ...state.llmStatus, pending: false, enrichmentPending: false };
-    state.session = incrementSessionTurn(state.session);
-    try { saveGrowthMoment(cleanText, state, speaker); persistStudentModel(state.studentModel); }
-    catch { document.querySelector("#storageWarning").hidden = false; }
+    state = { ...state, session: incrementSessionTurn(state.session) };
+    persistence.saveTurn(state, {
+      moment: createGrowthMomentInput(cleanText, state, speaker, captureGrowthTurnContext(localTurn, state)),
+      events: localStudentEvents.splice(0)
+    });
     dom.childInput.value = "";
     commitState();
-    if (pendingImageRoute) startOpenDrawing(pendingImageRoute, state.board);
+    conversation.settle(turn, true, "complete");
+    if (pendingImageRoute) startOpenDrawing(pendingImageRoute, state.board, turn);
     speakLatestTutorReply();
     return;
   }
   let savedMoment = null;
+  let growthContext = null;
+  const submissionEvents = {
+    pending: APP_EVENT.CONVERSATION_PENDING,
+    quick: APP_EVENT.CONVERSATION_QUICK_REPLY,
+    complete: APP_EVENT.CONVERSATION_COMPLETED,
+    protected: APP_EVENT.CONVERSATION_PROTECTED
+  };
+  // All ordinary conversation stages cross the same receive boundary before effects.
+  function acceptSubmission(submission, beforeCommit = () => {}) {
+    if (!isLiveTurn()) { conversation.settle(turn, false, submission.kind); return false; }
+    const applied = conversation.accept(turn, state, submission);
+    if (!applied.accepted) { conversation.settle(turn, false, submission.kind, applied.reason); return false; }
+    state = applied.state;
+    beforeCommit();
+    const accepted = commitState(state, { type: submissionEvents[submission.kind] });
+    conversation.settle(turn, true, submission.kind);
+    return accepted;
+  }
   const outcome = await conversation.run({
     turn,
     input: cleanText,
@@ -757,74 +850,67 @@ async function sendChildInput(text) {
     fallbackReply,
     evidenceBaseline: drawingContinuationBaseline(state, localTurn, evidenceBaseline),
     getState: () => state,
-    onPending: (nextState) => {
-      state = nextState;
-      dom.childInput.value = "";
-      setVoicePhase("thinking");
-      commitState(state, { type: APP_EVENT.CONVERSATION_PENDING });
+    onPending: submission => {
+      const accepted = acceptSubmission(submission, () => {
+        dom.childInput.value = "";
+        renderVoiceState();
+      });
+      if (accepted) growthContext = captureGrowthTurnContext(localTurn, accepted);
+      return accepted;
     },
     onQuickReply: (submission, { quickLatencyMs, replyMessageId }) => {
-      if (!conversation.isCurrent(turn)) return false;
-      const applied = applyConversationCommit(state, submission);
-      if (!applied.accepted) return false;
-      state = applied.state;
-      console.info("[小宇记耗时] 快速回答", quickLatencyMs, "ms");
-      recordVoiceTiming({ stage: "quick-reply", latencyMs: quickLatencyMs });
-      try {
-        savedMoment = saveGrowthMoment(cleanText, state, speaker, undefined, replyMessageId);
-        persistStudentModel(state.studentModel);
-      } catch { document.querySelector("#storageWarning").hidden = false; }
-      state = { ...state, session: incrementSessionTurn(state.session) };
-      commitState(state, { type: APP_EVENT.CONVERSATION_QUICK_REPLY });
+      const accepted = acceptSubmission(submission, () => {
+        console.info("[小宇记耗时] 快速回答", quickLatencyMs, "ms");
+        recordVoiceTiming({ stage: "quick-reply", latencyMs: quickLatencyMs });
+        const saved = persistence.saveTurn(state, {
+          moment: createGrowthMomentInput(cleanText, state, speaker, growthContext, undefined, replyMessageId),
+          events: localStudentEvents.splice(0)
+        });
+        // A later model/event failure does not undo a moment that was already written.
+        savedMoment = saved.moment;
+      });
+      if (!accepted) return false;
       speakLatestTutorReply(replyMessageId);
       return state;
     }
   });
 
-  if (outcome.status === "cancelled" || !conversation.isCurrent(turn)) return;
-  const applied = applyConversationCommit(state, outcome.commit);
-  if (!applied.accepted) return;
-  state = applied.state;
+  if (outcome.status === "cancelled") return;
+  const accepted = acceptSubmission(outcome.commit, () => {
+    if (!outcome.enriched) return;
+    console.info("[小宇记耗时] 完整回合", state.llmStatus.totalLatencyMs, "ms", {
+      quickReplyMs: state.llmStatus.quickLatencyMs,
+      enrichmentMs: state.llmStatus.latencyMs || 0
+    });
+    const saved = persistence.saveTurn(state, {
+      moment: savedMoment ? createGrowthMomentInput(cleanText, state, speaker, growthContext, savedMoment, outcome.replyMessageId) : null
+    });
+    if (!saved.ok) voiceSession.suspendAutoListen();
+  });
+  if (!accepted) return;
   if (outcome.status === "protected") {
-    commitState(state, { type: APP_EVENT.CONVERSATION_PROTECTED });
     speakLatestTutorReply();
     return;
   }
-
-  if (!outcome.enriched) {
-    commitState(state, { type: APP_EVENT.CONVERSATION_COMPLETED });
-    return;
-  }
-  console.info("[小宇记耗时] 完整回合", state.llmStatus.totalLatencyMs, "ms", {
-    quickReplyMs: state.llmStatus.quickLatencyMs,
-    enrichmentMs: state.llmStatus.latencyMs || 0
-  });
-  try {
-    if (savedMoment) saveGrowthMoment(cleanText, state, speaker, savedMoment, outcome.replyMessageId);
-    persistStudentModel(state.studentModel);
-  } catch {
-    handsFreeConversationActive = false;
-    document.querySelector("#storageWarning").hidden = false;
-  }
-  commitState(state, { type: APP_EVENT.CONVERSATION_COMPLETED });
+  if (!outcome.enriched) return;
   if (dom.workspace.dataset.activeView === "learn" && !document.hidden) {
-    scheduleAutoListen();
+    voiceSession.schedule();
   } else {
-    setVoicePhase("ready", { detail: "点一下小宇，继续聊" });
+    renderVoiceState();
   }
 }
 
-function saveGrowthMoment(childText, nextState, speaker, previousMoment, replyMessageId) {
+function createGrowthMomentInput(childText, nextState, speaker, context, previousMoment, replyMessageId) {
   if (nextState.safetyDecision?.protected || !checkChildSafety(childText, nextState).ok) return;
-  if (isInteractionControl(childText) || nextState.visualPlan?.needsPlanner || nextState.visualPlan?.changed === false) return;
+  if (isInteractionControl(childText) || !context.eligible) return;
   const latestTutor = findTutorMessage(nextState, replyMessageId);
   if (!latestTutor?.text) return;
 
-  const domain = normalizeGrowthDomain(nextState.board?.scene?.kind === "illustration" ? "art" : nextState.board?.scene?.kind === "blocks" ? "math" : nextState.activeLesson?.activity || nextState.board?.type);
+  const domain = context.domain;
 
   const evidence = nextState.growthEvidence || createLocalGrowthEvidence(childText, domain);
   const isChildSpeaker = !speaker || speaker.role === "child";
-  return recordGrowthMoment({
+  return {
     updateId: previousMoment?.id,
     expectedRevision: previousMoment?.revision,
     studentId: nextState.studentModel?.studentId || "local-demo-student",
@@ -833,10 +919,9 @@ function saveGrowthMoment(childText, nextState, speaker, previousMoment, replyMe
     tutorResponse: latestTutor.text,
     domain,
     domains: [domain],
-    topics: evidence.topics?.length ? evidence.topics : collectGrowthTopics(childText, nextState),
-    lessonTitle: nextState.activeLesson?.title || nextState.board?.title || "",
-    // Pictures can be downloaded explicitly; do not duplicate raster histories into every growth moment.
-    boardSnapshot: validImageBoard(nextState.board) ? null : nextState.board,
+    topics: evidence.topics?.length ? evidence.topics : collectGrowthTopics(childText, context),
+    lessonTitle: context.lessonTitle,
+    boardSnapshot: context.boardSnapshot,
     sourceType: isChildSpeaker ? "child_utterance" : "parent_note",
     speakerId: speaker?.id || "",
     speakerName: speaker?.name || nextState.profile.name || "孩子",
@@ -851,7 +936,7 @@ function saveGrowthMoment(childText, nextState, speaker, previousMoment, replyMe
     sourceModel: nextState.llmStatus?.used ? nextState.llmStatus.model : "local_rules",
     reviewEligible: isChildSpeaker && evidence.shouldSave !== false,
     confidence: evidence.confidence ?? 1
-  });
+  };
 }
 
 function createLocalGrowthEvidence(childText, domain) {
@@ -871,7 +956,7 @@ function createLocalGrowthEvidence(childText, domain) {
   };
 }
 
-function collectGrowthTopics(childText, nextState) {
+function collectGrowthTopics(childText, context) {
   const textTopics = [
     "月亮",
     "太阳",
@@ -891,18 +976,7 @@ function collectGrowthTopics(childText, nextState) {
     "爸爸",
     "幼儿园"
   ].filter((topic) => childText.includes(topic));
-  const boardTopics = Array.isArray(nextState.board?.items)
-    ? nextState.board.items.filter((item) => typeof item === "string" && !["谁", "在哪里", "做什么", "画一画"].includes(item))
-    : [];
-  const title = nextState.activeLesson?.story?.title || nextState.board?.story?.title || nextState.board?.title;
-
-  return [...new Set([...textTopics, ...boardTopics, title].filter(Boolean))].slice(0, 12);
-}
-
-function normalizeGrowthDomain(value) {
-  if (value === "algebra") return "math";
-  if (value === "safety" || value === "welcome" || value === "blank") return "language";
-  return value || "language";
+  return [...new Set([...textTopics, ...context.topics])].slice(0, 12);
 }
 
 async function loadVoiceStatus() {
@@ -918,229 +992,31 @@ async function loadVoiceStatus() {
   commitState();
 }
 
-function clearAutoListenTimer() {
-  if (autoListenTimer) window.clearTimeout(autoListenTimer);
-  autoListenTimer = null;
-}
-
-function scheduleAutoListen(delayMs = 200) {
-  clearAutoListenTimer();
-  if (!handsFreeConversationActive || state.session?.status !== "active") return;
-  if (state.llmStatus?.pending) return;
-  if (dom.workspace.dataset.activeView !== "learn" || document.hidden) return;
-  autoListenTimer = window.setTimeout(() => {
-    autoListenTimer = null;
-    if (!handsFreeConversationActive || isVoiceActive || voiceUiState.phase === "thinking" || voiceUiState.phase === "speaking") return;
-    beginVoiceInput({ automated: true });
-  }, delayMs);
-}
-
-function pauseHandsFreeConversation({ detail = "点一下小宇，继续聊", stopSpeech = true } = {}) {
-  narrationId++;
-  stopWhiteboardPlayback(dom.whiteboard);
-  handsFreeConversationActive = false;
-  clearAutoListenTimer();
-  voice.stopListening();
-  if (stopSpeech) voice.stopSpeaking();
-  isVoiceActive = false;
-  dom.mainVoiceButton.classList.remove("is-listening");
-  stopListeningMotion();
-  if (state.session?.status === "active") setVoicePhase("ready", { detail });
-}
-
-function beginVoiceInput({ automated = false } = {}) {
-  microphoneSettings.reset();
-  if (!automated) voice.preparePlayback();
-  if (isVoiceActive) return;
-  if (voiceUiState.phase === "thinking") return;
-  if (!automated) handsFreeConversationActive = true;
-  clearAutoListenTimer();
-  narrationId++;
-  stopWhiteboardPlayback(dom.whiteboard);
-  voice.stopSpeaking();
-  isVoiceActive = true;
-  setVoicePhase("listening");
-  dom.mainVoiceButton.classList.add("is-listening");
-  startListeningMotion();
-  voice.listen({
-    preferRecorder: Boolean(voiceCloudStatus?.cloudTranscription && voice.recordingSupported),
-    preferRealtime: Boolean(voiceCloudStatus?.realtimeTranscription),
-    onStart: (details = {}) => {
-      microphoneSettings.noteConversationInput(details.inputLabel);
-      if (!isVoiceActive) {
-        voice.finishListening();
-        return;
-      }
-      const speaker = getActiveSpeaker(state.family, state.profile);
-      dom.voiceStatus.textContent = details.mode === "recording" ? `正在听${speaker?.name || "你"}说话...` : `正在听${speaker?.name || "你"}说话...`;
-      dom.voiceTranscript.textContent = details.mode === "recording" ? "说完会自动处理，也可以再点一下结束。" : "请慢慢说一句话。";
-    },
-    onLevel: applyVoiceLevel,
-    onTiming: recordVoiceTiming,
-    onProcessing: () => {
-      voiceTurnStartedAt = window.performance.now();
-      isVoiceActive = false;
-      dom.mainVoiceButton.classList.remove("is-listening");
-      stopListeningMotion();
-      setVoicePhase("thinking");
-    },
-    onResult: (text) => {
-      dom.voiceTranscript.textContent = text || "正在听...";
-    },
-    onError: (message) => {
-      handsFreeConversationActive = false;
-      clearAutoListenTimer();
-      isVoiceActive = false;
-      dom.mainVoiceButton.classList.remove("is-listening");
-      stopListeningMotion();
-      setVoicePhase("retry");
-      dom.voiceStatus.textContent = "语音没有成功";
-      dom.voiceTranscript.textContent = message;
-    },
-    onIdle: () => {
-      handsFreeConversationActive = false;
-      clearAutoListenTimer();
-      isVoiceActive = false;
-      dom.mainVoiceButton.classList.remove("is-listening");
-      stopListeningMotion();
-      setVoicePhase("ready", { detail: "我先等一等，点我继续聊" });
-      dom.voiceTranscript.textContent = "";
-    },
-    onEnd: (text) => {
-      isVoiceActive = false;
-      dom.mainVoiceButton.classList.remove("is-listening");
-      stopListeningMotion();
-      if (!text) {
-        handsFreeConversationActive = false;
-        setVoicePhase("ready", { detail: "点一下小宇，继续聊" });
-        return;
-      }
-      setVoicePhase("thinking");
-      dom.childInput.value = text;
-      sendChildInput(text);
-    }
-  });
-}
-
-function finishVoiceInput() {
-  if (!isVoiceActive) return;
-  isVoiceActive = false;
-  dom.mainVoiceButton.classList.remove("is-listening");
-  stopListeningMotion();
-  setVoicePhase("thinking");
-  voice.finishListening();
-}
-
-function handleSpeechFailure() {
-  handsFreeConversationActive = false;
-  clearAutoListenTimer();
-  setVoicePhase("ready", { detail: "声音暂时没连上，可以再听一次。" });
-  document.querySelector("#speechFailureText").textContent = findTutorMessage(state, speechReplyMessageId)?.text || "";
-  document.querySelector("#speechFailure").hidden = false;
-}
-
 document.querySelector("#retrySpeech").addEventListener("click", () => {
   voice.preparePlayback();
-  speakLatestTutorReply(speechReplyMessageId);
+  speakLatestTutorReply(voiceSession.getSnapshot().replyMessageId);
 });
 
 function speakLatestTutorReply(replyMessageId = null) {
-  speechReplyMessageId = replyMessageId;
   document.querySelector("#speechFailure").hidden = true;
   if (replyMessageId && !findTutorMessage(state, replyMessageId)) {
-    setVoicePhase("ready");
+    renderVoiceState();
     return;
   }
   const publication = !replyMessageId && validVisualScene(state.board) ? state.board : findTutorMessage(state, replyMessageId)?.text;
   if (!checkTutorSafetyOutput(publication).ok) {
     stopWhiteboardPlayback(dom.whiteboard);
     state = createSafetyTurn(state, { protected: true, category: "output", reply: "这句话我需要再确认，不能随便给你建议。" });
-    replyMessageId = speechReplyMessageId = null;
+    replyMessageId = null;
     commitState();
   }
-  if (!replyMessageId && validVisualScene(state.board)) {
-    const token = ++narrationId;
-    const steps = state.board.scene.steps;
-    let previousSpeechEndedAt = null;
-    // A direct, single-step edit must stay visible even if audio never starts.
-    // Only multi-step explanations need to hide future frames while waiting for speech.
-    if (steps.length > 1) prepareWhiteboardPlayback(dom.whiteboard);
-    if (!dom.speakReplies.checked) {
-      replayWhiteboard(dom.whiteboard);
-      setVoicePhase("ready");
-      scheduleAutoListen(steps.length * 1200);
-      return;
-    }
-    const speakStep = index => {
-      if (token !== narrationId || state.session?.status !== "active") return;
-      if (index >= steps.length) { setVoicePhase("ready"); scheduleAutoListen(); return; }
-      setVoicePhase("thinking");
-      voice.speak(steps[index].text, {
-        onTiming: recordVoiceTiming,
-        onStart: () => {
-          if (token !== narrationId) return;
-          if (previousSpeechEndedAt !== null) {
-            recordVoiceTiming({ stage: "drawing-segment-gap", latencyMs: window.performance.now() - previousSpeechEndedAt });
-          } else if (voiceTurnStartedAt !== null) {
-            recordVoiceTiming({ stage: "response-start", latencyMs: window.performance.now() - voiceTurnStartedAt });
-            voiceTurnStartedAt = null;
-          }
-          presentWhiteboardStep(dom.whiteboard, index);
-          voice.prefetchSpeech(steps[index + 1]?.text);
-          setVoicePhase("speaking");
-        },
-        onEnd: () => {
-          if (token !== narrationId) return;
-          previousSpeechEndedAt = window.performance.now();
-          speakStep(index + 1);
-        },
-        onError: () => {
-          if (token !== narrationId) return;
-          // Audio failure must not strand the board on a partial frame.
-          replayWhiteboard(dom.whiteboard);
-          handleSpeechFailure();
-        }
-      });
-    };
-    speakStep(0);
-    return;
-  }
-  if (!dom.speakReplies.checked) {
-    setVoicePhase("ready", { detail: "还想告诉我什么？" });
-    scheduleAutoListen();
-    return;
-  }
-  const latestTutor = findTutorMessage(state, replyMessageId);
-  if (!latestTutor) {
-    setVoicePhase("ready", { detail: "还想告诉我什么？" });
-    scheduleAutoListen();
-    return;
-  }
-  const started = voice.speak(latestTutor.text, {
-    onTiming: recordVoiceTiming,
-    onStart: () => {
-      if (voiceTurnStartedAt !== null) {
-        recordVoiceTiming({ stage: "response-start", latencyMs: window.performance.now() - voiceTurnStartedAt });
-        voiceTurnStartedAt = null;
-      }
-      setVoicePhase("speaking");
-    },
-    onEnd: () => {
-      if (!isVoiceActive) {
-        setVoicePhase("ready", { detail: "还想告诉我什么？" });
-        scheduleAutoListen();
-      }
-    },
-    onError: () => {
-      if (!isVoiceActive) {
-        handleSpeechFailure();
-      }
-    }
+  voiceSession.playReply({
+    replyMessageId,
+    enabled: dom.speakReplies.checked,
+    ...(!replyMessageId && validVisualScene(state.board)
+      ? { steps: state.board.scene.steps }
+      : { text: findTutorMessage(state, replyMessageId)?.text })
   });
-  if (!started) {
-    setVoicePhase("ready", { detail: "还想告诉我什么？" });
-    scheduleAutoListen();
-  }
 }
 
 function recordVoiceTiming({ stage, latencyMs, serverLatencyMs = 0 } = {}) {
@@ -1173,7 +1049,7 @@ async function saveProfileFromForm() {
   dom.saveProfile.textContent = "保存中";
   try {
   const parentPinHash = enteredPin ? await hashParentPin(enteredPin) : state.profile.parentPinHash || "";
-  state.profile = {
+  appStore.update(current => updateProfileState(current, {
     name: dom.profileForm.studentName.value.trim(),
     ageBand: dom.profileForm.ageBand.value,
     interest: dom.profileForm.interest.value.trim(),
@@ -1182,14 +1058,13 @@ async function saveProfileFromForm() {
     parentPinHash,
     showSessionSummary: dom.profileForm.showSessionSummary.checked,
     configured: Boolean(dom.profileForm.studentName.value.trim())
-  };
-  state.family = syncPrimaryChild(state.family, state.profile);
-  state.studentModel = ensureStudentModel(state);
-  persistStudentModel(state.studentModel);
-  saveState(state);
+  }), { type: APP_EVENT.PROFILE_UPDATED });
+  if (!persistence.isSnapshotSaved(state) || !persistence.saveProfile(state).ok) {
+    dom.profileSaveStatus.textContent = "没能完整保存，请重试或下载备份。";
+    return false;
+  }
   dom.profileSaveStatus.textContent = enteredPin ? "资料和家长码已保存。" : "资料已保存。";
   syncProfileForm();
-  commitState();
   return true;
   } catch {
     dom.profileSaveStatus.textContent = "没能完整保存，请重试或下载备份。";
@@ -1205,8 +1080,7 @@ function startSessionFromParent() {
   voice.preparePlayback();
   if (state.session?.status === "active") {
     switchView("learn");
-    handsFreeConversationActive = true;
-    scheduleAutoListen(250);
+    voiceSession.resume();
     return;
   }
 
@@ -1223,37 +1097,18 @@ function startSessionFromParent() {
     return;
   }
 
-  state.profile = {
-    ...state.profile,
+  appStore.update(current => startSessionState(current, {
     name,
-    ageBand: state.profile.configured ? state.profile.ageBand : dom.startAgeBand.value,
-    consent,
-    configured: true
-  };
-  state.family = syncPrimaryChild(state.family, state.profile);
-  state.studentModel = ensureStudentModel(state);
-  persistStudentModel(state.studentModel);
-  state.session = createActiveSession(state.studentModel.studentId, new Date());
-  startStudentSession(state.studentModel.studentId, state.session.id, state.session.startedAt);
-  state.messages = [];
-  state.drawingRequest = null;
-  state.board = { type: "blank" };
-  state.activeLesson = null;
-  state.lastAssessment = null;
-  state.lastSessionSummary = null;
-  state.growthEvidence = null;
-  appendStudentEvent(state.studentModel.studentId, "session_started", {
-    sessionId: state.session.id,
-    activeSpeakerId: state.family.activeSpeakerId
-  });
+    ageBand: current.profile.configured ? current.profile.ageBand : dom.startAgeBand.value,
+    consent, configured: true
+  }), { type: APP_EVENT.SESSION_STARTED });
+  const saved = persistence.startSession(state);
+  const fullySaved = saved.ok && persistence.isSnapshotSaved(state);
   parentUnlockedUntil = 0;
   syncProfileForm();
-  const speaker = getActiveSpeaker(state.family, state.profile);
-  setVoicePhase("ready", { detail: `嗨${speaker?.name || name}，想告诉我什么？` });
+  renderVoiceState();
   switchView("learn");
-  commitState();
-  handsFreeConversationActive = true;
-  scheduleAutoListen(250);
+  if (fullySaved) voiceSession.resume();
 }
 
 function startSessionFromMobileHome() {
@@ -1276,40 +1131,20 @@ function showParentSetup(message = "") {
 }
 
 function finishCurrentSession({ farewell = null } = {}) {
-  cancelOpenDrawing();
   if (state.session?.status !== "active") return;
-  narrationId += 1;
-  stopWhiteboardPlayback(dom.whiteboard);
-  handsFreeConversationActive = false;
-  clearAutoListenTimer();
-  conversation.cancel();
-  state.llmStatus = { ...state.llmStatus, pending: false, enrichmentPending: false };
+  stopInteraction({ persist: false });
   const moments = getStudentGrowthMoments(state.studentModel?.studentId);
-  const ended = endActiveSession(state.session, moments);
-  state.session = ended.session;
-  state.lastSessionSummary = ended.summary;
-  finishStudentSession(state.session.id, ended.summary, state.session.endedAt);
-  appendStudentEvent(state.studentModel.studentId, "session_ended", {
-    sessionId: state.session.id,
-    turnCount: state.session.turnCount,
-    momentIds: ended.summary?.momentIds || []
-  });
-  voice.stopListening();
-  voice.stopSpeaking();
-  isVoiceActive = false;
-  dom.mainVoiceButton.classList.remove("is-listening");
-  stopListeningMotion();
-  setVoicePhase("ready");
+  // Include the cleaned stop state in the same lifecycle update.
+  const stopped = state;
+  appStore.update(() => endSessionState(stopped, moments), { type: APP_EVENT.SESSION_ENDED });
+  const saved = persistence.finishSession(state);
+  const fullySaved = saved.ok && persistence.isSnapshotSaved(state);
+
+  renderVoiceState();
   switchView("parent");
-  commitState();
+  if (!fullySaved) dom.sessionFormStatus.textContent = "聊天已结束，但记录未完整保存，请下载已有备份。";
   if (farewell && dom.speakReplies.checked) {
-    // End first, then acknowledge once. No callback may re-open the microphone.
-    const token = narrationId;
-    voice.speak(farewell, {
-      onStart: () => { if (token === narrationId) setVoicePhase("speaking"); },
-      onEnd: () => { if (token === narrationId) setVoicePhase("ready"); },
-      onError: () => { if (token === narrationId) setVoicePhase("ready"); }
-    });
+    voiceSession.acknowledgeEnd(farewell);
   }
 }
 
@@ -1321,9 +1156,7 @@ document.querySelectorAll("[data-view-link]").forEach((button) => {
 
 function switchView(view) {
   if (view !== "parent") microphoneSettings.reset();
-  if (view !== "learn" && state.session?.status === "active") {
-    pauseHandsFreeConversation({ detail: "点一下小宇，继续聊" });
-  }
+  if (view !== "learn") stopInteraction();
   dom.navButtons.forEach((item) => {
     const active = item.dataset.view === view;
     item.classList.toggle("is-active", active);
@@ -1331,6 +1164,7 @@ function switchView(view) {
     else item.removeAttribute("aria-current");
   });
   dom.workspace.dataset.activeView = view;
+  requestVoiceRender();
   window.scrollTo({ top: 0, behavior: "auto" });
   closeMobileDrawer();
 }
@@ -1402,17 +1236,17 @@ dom.mainVoiceButton.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
   event.preventDefault();
   dom.mainVoiceButton.setPointerCapture?.(event.pointerId);
-  voicePointerStopsExisting = isVoiceActive;
+  voicePointerStopsExisting = voiceSession.getSnapshot().input === "capturing";
   voicePressStartedAt = window.performance.now();
   if (voicePointerStopsExisting) return;
-  beginVoiceInput();
+  voiceSession.beginInput();
 });
 
 dom.mainVoiceButton.addEventListener("pointerup", (event) => {
   event.preventDefault();
   const pressDuration = window.performance.now() - voicePressStartedAt;
   if (shouldFinishVoiceOnRelease({ wasAlreadyListening: voicePointerStopsExisting, pressDurationMs: pressDuration })) {
-    finishVoiceInput();
+    voiceSession.finishInput();
   }
   voicePressStartedAt = 0;
   voicePointerStopsExisting = false;
@@ -1421,20 +1255,20 @@ dom.mainVoiceButton.addEventListener("pointerup", (event) => {
 dom.mainVoiceButton.addEventListener("pointercancel", () => {
   voicePressStartedAt = 0;
   voicePointerStopsExisting = false;
-  finishVoiceInput();
+  voiceSession.finishInput();
 });
 dom.mainVoiceButton.addEventListener("contextmenu", (event) => event.preventDefault());
 
 dom.mainVoiceButton.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || event.repeat) return;
   event.preventDefault();
-  beginVoiceInput();
+  voiceSession.beginInput();
 });
 
 dom.mainVoiceButton.addEventListener("keyup", (event) => {
   if (!["Enter", " "].includes(event.key)) return;
   event.preventDefault();
-  finishVoiceInput();
+  voiceSession.finishInput();
 });
 
 dom.profileForm.addEventListener("submit", (event) => { event.preventDefault(); saveProfileFromForm(); });
@@ -1444,15 +1278,14 @@ dom.whiteboard.addEventListener("drawing-undo", () => {
   if (validImageBoard(state.board)) void sendChildInput("撤销");
 });
 dom.whiteboard.addEventListener("whiteboard-replay", () => {
-  pauseHandsFreeConversation();
+  stopInteraction();
   replayWhiteboard(dom.whiteboard);
 });
 dom.endParentSession.addEventListener("click", finishCurrentSession);
 dom.activeSpeaker.addEventListener("change", () => {
-  state.family = setActiveSpeaker(state.family, dom.activeSpeaker.value);
-  const speaker = getActiveSpeaker(state.family, state.profile);
-  setVoicePhase("ready", { detail: `${speaker?.name || "你"}，想告诉我什么？` });
-  commitState();
+  appStore.update(current => ({ ...current, family: setActiveSpeaker(current.family, dom.activeSpeaker.value) }),
+    { type: APP_EVENT.FAMILY_UPDATED });
+  renderVoiceState();
 });
 dom.familyMemberForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -1468,25 +1301,23 @@ dom.familyMemberForm.addEventListener("submit", (event) => {
     return;
   }
   const previousCount = state.family.members.length;
-  state.family = addFamilyMember(state.family, {
-    name,
-    role: dom.familyMemberRole.value
-  });
+  appStore.update(current => ({ ...current, family: addFamilyMember(current.family, {
+    name, role: dom.familyMemberRole.value
+  }) }), { type: APP_EVENT.FAMILY_UPDATED });
   if (state.family.members.length === previousCount) {
     dom.familyMemberStatus.textContent = "没有添加成功，请换一个称呼再试。";
     return;
   }
   dom.familyMemberName.value = "";
   dom.familyMemberStatus.textContent = `已添加${name}。聊天时可以选择由谁说话。`;
-  commitState();
 });
 dom.familyMemberList.addEventListener("click", (event) => {
   const button = event.target.closest('[data-family-action="remove"]');
   if (!button) return;
   const target = state.family.members.find((member) => member.id === button.dataset.memberId);
-  state.family = removeFamilyMember(state.family, button.dataset.memberId);
+  appStore.update(current => ({ ...current, family: removeFamilyMember(current.family, button.dataset.memberId) }),
+    { type: APP_EVENT.FAMILY_UPDATED });
   dom.familyMemberStatus.textContent = target ? `已移除${target.name}。` : "";
-  commitState();
 });
 dom.sessionGate.addEventListener("click", (event) => {
   voice.preparePlayback();
@@ -1514,11 +1345,7 @@ document.addEventListener("keydown", (event) => {
 
 dom.resetSession.addEventListener("click", () => {
   const fresh = createInitialState();
-  state.messages = fresh.messages;
-  state.board = fresh.board;
-  state.activeLesson = null;
-  state.lastAssessment = null;
-  commitState();
+  commitState({ ...state, messages: fresh.messages, board: fresh.board, activeLesson: null, lastAssessment: null });
 });
 
 dom.exportData.addEventListener("click", () => {
@@ -1545,10 +1372,9 @@ dom.copyParentNote.addEventListener("click", async () => {
 dom.saveObservation.addEventListener("click", saveOfflineObservation);
 
 dom.clearParentPin.addEventListener("click", () => {
-  state.profile.parentPinHash = "";
+  appStore.update(current => updateProfileState(current, { parentPinHash: "" }), { type: APP_EVENT.PROFILE_UPDATED });
   parentUnlockedUntil = 0;
   dom.profileSaveStatus.textContent = "家长码已清除。";
-  commitState();
 });
 
 dom.parentUnlockForm.addEventListener("submit", async (event) => {
@@ -1629,9 +1455,12 @@ function handleMemoryAction(event, dashboard) {
   if (action === "toggle-save") {
     const moment = moments.find((item) => item.id === button.dataset.momentId);
     if (!moment) return;
-    setGrowthMomentsStarred([moment.id], !moment.saved);
+    if (!persistence.starMoments([moment.id], !moment.saved).ok) {
+      setMomentActionStatus("未能保存珍藏标记，请重试或下载备份。");
+      return;
+    }
     const message = moment.saved ? "已取消珍藏" : "已珍藏这句话";
-    commitState();
+    render();
     setMomentActionStatus(message);
     return;
   }
@@ -1649,8 +1478,11 @@ function handleMemoryAction(event, dashboard) {
     return;
   }
   if (action === "save-selected") {
-    setGrowthMomentsStarred(selectedIds, true);
-    commitState();
+    if (!persistence.starMoments(selectedIds, true).ok) {
+      setMomentActionStatus("未能保存珍藏标记，请重试或下载备份。");
+      return;
+    }
+    render();
     setMomentActionStatus(`已珍藏 ${selectedIds.length} 条对话`);
     return;
   }
@@ -1702,19 +1534,10 @@ function escapeUi(value) {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && state.session?.status === "active") {
-    pauseHandsFreeConversation({ detail: "点一下小宇，继续聊" });
-  }
+  if (document.hidden) stopInteraction();
 });
 
-window.addEventListener("pagehide", () => {
-  cancelOpenDrawing();
-  conversation.cancel();
-  handsFreeConversationActive = false;
-  clearAutoListenTimer();
-  voice.stopListening();
-  voice.stopSpeaking();
-});
+window.addEventListener("pagehide", () => stopInteraction());
 
 syncProfileForm();
 if (!state.profile.configured && state.session?.status !== "active" && !window.matchMedia("(max-width: 900px)").matches) {

@@ -1,3 +1,4 @@
+import { selectModelDiagnostics } from "../../services/modelDiagnostics.js";
 import { mergeEnrichmentState } from "../../session/enrichmentState.js";
 
 export function latestTutorReply(nextState) {
@@ -38,29 +39,23 @@ export function createPendingConversationState(localTurn, turnId) {
       provider: "qwen",
       used: false,
       fallback: false,
-      pending: true,
-      stage: "quick-reply",
-      message: "正在准备回答"
     }
   };
 }
 
-export function createQuickReplyState(pendingState, spokenReply, quickReply, replyMessageId) {
+export function createQuickReplyState(pendingState, spokenReply, quickReply, candidate) {
   const quickLatencyMs = quickReply.clientLatencyMs ?? quickReply.llmStatus?.latencyMs ?? 0;
-  const target = pendingState.messages?.find(message => message.id === replyMessageId && message.role === "tutor");
-  if (!target) return null;
-  const nextState = { ...pendingState, messages: pendingState.messages.map(message =>
-    message === target ? { ...message, text: spokenReply } : message) };
+  const childIndex = pendingState.messages.findIndex(message => message.id === `${candidate.turnId}:child`);
+  const reply = { id: candidate.id, turnId: candidate.turnId, role: "tutor", text: spokenReply };
+  const nextState = { ...pendingState, messages: [
+    ...pendingState.messages.slice(0, childIndex + 1), reply, ...pendingState.messages.slice(childIndex + 1)
+  ] };
   return {
     ...nextState,
     llmStatus: {
-      ...nextState.llmStatus,
+      ...selectModelDiagnostics(quickReply.llmStatus),
       quickUsed: Boolean(quickReply.llmStatus?.used),
-      quickLatencyMs,
-      pending: false,
-      enrichmentPending: true,
-      stage: "enrichment",
-      message: "正在补全白板和成长记录"
+      quickLatencyMs
     }
   };
 }
@@ -69,9 +64,7 @@ export function finishWithoutEnrichment(currentState, { fallback = false } = {})
   return {
     ...currentState,
     llmStatus: {
-      ...currentState.llmStatus,
-      pending: false,
-      enrichmentPending: false,
+      ...selectModelDiagnostics(currentState.llmStatus),
       ...(fallback ? { fallback: true } : {})
     }
   };
@@ -87,13 +80,31 @@ export function createEnrichedConversationState(currentState, enrichedState, {
   return {
     ...mergedState,
     llmStatus: {
-      ...(mergedState.llmStatus || {}),
-      pending: false,
-      enrichmentPending: false,
-      stage: "complete",
+      ...selectModelDiagnostics(mergedState.llmStatus),
       quickUsed: Boolean(quickReply.llmStatus?.used),
       quickLatencyMs: quickReply.clientLatencyMs ?? quickReply.llmStatus?.latencyMs ?? 0,
       totalLatencyMs
     }
   };
+}
+
+// Current candidates live only in the controller; stopping never removes accepted history.
+export function cancelPendingConversationState(currentState) {
+  const status = currentState.llmStatus;
+  if (!status?.pending && !status?.enrichmentPending) return currentState;
+  return {
+    ...currentState,
+    llmStatus: selectModelDiagnostics(status)
+  };
+}
+
+// Only at page load: older versions persisted the identified pending pair.
+export function recoverInterruptedConversationState(savedState) {
+  const status = savedState.llmStatus;
+  const messages = savedState.messages || [];
+  const candidate = messages.at(-1), child = messages.at(-2);
+  const legacyCandidate = status?.pending && status.stage === "quick-reply" &&
+    candidate?.role === "tutor" && candidate.turnId && candidate.id === `${candidate.turnId}:tutor` &&
+    child?.role === "child" && child.id === `${candidate.turnId}:child` && child.turnId === candidate.turnId;
+  return cancelPendingConversationState(legacyCandidate ? { ...savedState, messages: messages.slice(0, -1) } : savedState);
 }

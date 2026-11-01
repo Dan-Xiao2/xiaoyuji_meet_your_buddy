@@ -1,11 +1,7 @@
 import { createConversationTurn as createTutorTurn } from "./tutorEngine.js";
 import { validIllustrationScene } from "../whiteboard/illustrationPlan.js";
 import { safeConversationMessages, checkTutorSafetyOutput } from "./safety.js";
-
-function withoutImagePayload(payload) {
-  if (payload.state?.board?.type !== "image") return payload;
-  return { ...payload, state: { ...payload.state, board: { type: "blank" }, visualPlan: null } };
-}
+import { createTutorRequest, tutorEnrichmentResult } from "./tutorContext.js";
 
 export async function callDrawingPlanApi({ input, state }, { signal } = {}) {
   if (window.location.protocol === "file:") return null;
@@ -38,11 +34,11 @@ export async function callTutorApi(payload, { signal } = {}) {
       method: "POST",
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000),
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(withoutImagePayload(payload))
+      body: JSON.stringify(createTutorRequest(payload))
     });
 
     if (!response.ok) throw new Error("Tutor API failed");
-    return await response.json();
+    return tutorEnrichmentResult(await response.json(), payload.state.memory);
   } catch (error) {
     if (signal?.aborted) return null;
     console.warn("Using local tutor engine fallback", error);
@@ -64,7 +60,7 @@ export async function callQuickTutorApi(payload, { signal } = {}) {
       method: "POST",
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(withoutImagePayload(payload))
+      body: JSON.stringify(createTutorRequest(payload))
     });
     if (!response.ok) throw new Error("Quick tutor API failed");
     const result = await response.json();

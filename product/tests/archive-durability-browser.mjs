@@ -1,3 +1,4 @@
+import { waitForConversationPhase } from "./helpers/runtimeDiagnostics.mjs";
 import assert from 'node:assert/strict';
 import { createInitialState } from '../src/data/studentModel.js';
 import { normalizeLocalStudentDb } from '../src/data/localStudentDb.js';
@@ -10,7 +11,7 @@ state.profile = { ...state.profile, name: '耐久测试', configured: true, cons
 const db = normalizeLocalStudentDb({ studentModels: { [state.studentModel.studentId]: state.studentModel }, growthMoments: [{
   id: 'durable-one', studentId: state.studentModel.studentId, childQuote: '我喜欢画花', tutorResponse: '一起画吧'
 }] });
-async function setup({ active = false, width = 1280, parentPinHash = '' } = {}) {
+async function setup({ active = false, width = 1280, parentPinHash = '', observation = false } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 900 } });
   await context.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   await context.addInitScript(({ state, db }) => {
@@ -28,6 +29,7 @@ async function setup({ active = false, width = 1280, parentPinHash = '' } = {}) 
       return fetch(url, options).then(result => { item.settled = true; return result; }, error => { item.settled = true; throw error; });
     };
   }, { state: { ...state, profile: { ...state.profile, parentPinHash },
+    ...(observation ? { offlineTask: { ...state.offlineTask, status: 'assigned' } } : {}),
     ...(active ? { session: { status: 'active', id: 'archive-clear-test', turnCount: 0 } } : {}) }, db });
   const page = await context.newPage();
   await page.goto(url);
@@ -51,6 +53,51 @@ try {
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('xiaoyuji-local-student-db-v1')).growthMoments.length), 1);
     await page.locator('#clearArchiveDialog').getByRole('button', { name: '保留资料' }).click();
     console.log('PASS clear confirmation requires the configured parent PIN even when invoked directly');
+    await context.close();
+  }
+  for (const action of ['star', 'session-end', 'session-start', 'profile', 'profile-state', 'observation']) {
+    const { context, page } = await setup({ active: action === 'session-end', observation: action === 'observation' });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.evaluate(action => {
+      window.failedApplicationWrites = 0;
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === (action === 'profile-state' ? 'xiaoyuji-learning-state-v1' : 'xiaoyuji-local-student-db-v1')) {
+          window.failedApplicationWrites++;
+          throw new DOMException('Synthetic application write failure', 'QuotaExceededError');
+        }
+        return set.call(this, key, value);
+      };
+    }, action);
+    await page.evaluate(action => {
+      if (action === 'star') document.querySelector('#backupDashboard [data-memory-action="toggle-save"]').click();
+      if (action === 'session-end') document.querySelector('#endParentSession').click();
+      if (action === 'session-start') document.querySelector('#startChildSession').click();
+      if (action.startsWith('profile')) document.querySelector('#profileForm').requestSubmit();
+      if (action === 'observation') {
+        document.querySelector('.observation-drawer').open = true;
+        document.querySelector('#observationNotes').value = '测试观察仍需保留';
+        document.querySelector('#saveObservation').click();
+      }
+    }, action);
+    await page.waitForFunction(() => window.failedApplicationWrites > 0);
+    assert.equal(await page.locator('#storageWarning').isVisible(), true, `${action}: primary failure visible`);
+    assert.deepEqual(errors, [], `${action}: no uncaught write failure`);
+    if (action === 'star') {
+      assert.match(await page.locator('#momentActionStatus').textContent(), /未能保存/);
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('xiaoyuji-local-student-db-v1')).growthMoments[0].starred), false);
+    }
+    if (action.startsWith('profile')) assert.match(await page.locator('#profileSaveStatus').textContent(), /没能完整保存/);
+    if (action === 'observation') {
+      assert.equal(await page.locator('#observationNotes').inputValue(), '测试观察仍需保留');
+      assert.equal(await page.locator('.observation-drawer').evaluate(el => el.open), true);
+    }
+    if (action === 'session-end') {
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('xiaoyuji-learning-state-v1')).session.status), 'ended');
+      assert.match(await page.locator('#sessionFormStatus').textContent(), /未完整保存/);
+    }
+    console.log(`PASS ${action} write failure is visible without a false success or uncaught error`);
     await context.close();
   }
   for (const width of [390, 1440]) {
@@ -187,7 +234,7 @@ try {
     console.log('PASS interrupted durable deletion cannot resurrect cleared records on reload');
     await context.close();
   }
-  {
+  for (const failOnWrite of [1, 2]) {
     const { context, page } = await setup({ active: true });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -205,11 +252,12 @@ try {
       }
       return route.fulfill({ json: {} });
     });
-    await page.evaluate(() => {
+    await page.evaluate(failOnWrite => {
       window.failedMomentWrites = 0;
+      let momentWrites = 0;
       const set = Storage.prototype.setItem;
       Storage.prototype.setItem = function (key, value) {
-        if (key === 'xiaoyuji-local-student-db-v1' && JSON.parse(value).growthMoments.length > 1) {
+        if (key === 'xiaoyuji-local-student-db-v1' && JSON.parse(value).growthMoments.length > 1 && ++momentWrites === failOnWrite) {
           Storage.prototype.setItem = set;
           window.failedMomentWrites++;
           throw new DOMException('Synthetic first-save failure', 'QuotaExceededError');
@@ -218,24 +266,34 @@ try {
       };
       document.querySelector('#childInput').value = '我今天在公园有一个新发现';
       document.querySelector('#askForm').requestSubmit();
-    });
+    }, failOnWrite);
     await page.waitForFunction(() => window.archiveRequests.some(item => item.url.endsWith('/api/tutor') && !item.settled));
     assert.equal(await page.evaluate(() => window.failedMomentWrites), 1);
     assert.equal(await page.locator('#storageWarning').isVisible(), true);
+    const quickMoments = await page.evaluate(() => JSON.parse(localStorage.getItem('xiaoyuji-local-student-db-v1')).growthMoments);
     release();
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiaoyuji-learning-state-v1')).llmStatus?.stage === 'complete');
+    await waitForConversationPhase(page, "complete");
     const retained = await page.evaluate(() => JSON.parse(localStorage.getItem('xiaoyuji-local-student-db-v1')).growthMoments);
-    assert.deepEqual(retained.map(item => item.id), ['durable-one']);
+    assert.deepEqual(retained.map(item => item.id), quickMoments.map(item => item.id));
+    if (failOnWrite === 1) assert.deepEqual(retained.map(item => item.id), ['durable-one']);
+    else {
+      assert.equal(retained.length, 2);
+      assert.equal(retained[0].revision, quickMoments[0].revision + 1);
+    }
     assert.deepEqual(errors, []);
-    console.log('PASS failed first moment save is visible and enrichment cannot create a replacement moment');
+    console.log(`PASS write ${failOnWrite} failure retains the actual saved moment identity through enrichment`);
     await context.close();
   }
-  for (const stage of ['quick', 'speech']) {
+  for (const { stage, archiveChanges = false } of [
+    { stage: 'quick' }, { stage: 'speech' }, { stage: 'speech', archiveChanges: true }
+  ]) {
     const { context, page } = await setup({ active: true });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     let release;
     const gate = new Promise(resolve => { release = resolve; });
+    let releaseEnrichment;
+    const enrichmentGate = new Promise(resolve => { releaseEnrichment = resolve; });
     await page.route('**/api/**', async route => {
       const path = new URL(route.request().url()).pathname;
       if (path === '/api/whiteboard/route') return route.fulfill({ json: { mode: 'chat' } });
@@ -247,6 +305,8 @@ try {
         if (stage === 'speech') await gate;
         return route.fulfill({ status: 503, body: 'Synthetic speech unavailable' });
       }
+      // Keep unrelated background writes out of the cancellation assertion.
+      if (path === '/api/tutor') await enrichmentGate;
       return route.fulfill({ json: {} });
     });
     await page.evaluate(() => {
@@ -255,14 +315,36 @@ try {
     });
     const target = stage === 'quick' ? '/api/tutor/quick' : '/api/speech';
     await page.waitForFunction(target => window.archiveRequests.some(item => item.url.includes(target) && !item.settled), target);
+    if (stage === 'speech') {
+      await page.waitForFunction(() => window.archiveRequests.some(item => item.url.endsWith('/api/tutor') && !item.settled));
+    }
     await page.evaluate(() => document.querySelector('#clearData').click());
+    if (archiveChanges) {
+      releaseEnrichment();
+      await waitForConversationPhase(page, "complete");
+      await page.locator('#clearArchiveForm button[type=submit]').click();
+      assert.equal(await page.locator('#clearArchiveDialog').isVisible(), true);
+      assert.match(await page.locator('#clearArchiveStatus').textContent(), /变化/);
+      assert.equal(await page.evaluate(() => window.archiveRequests.some(item => item.url.includes('/api/speech') && item.aborted)), false);
+      await page.evaluate(() => {
+        window.clearDialogClosed = false;
+        document.querySelector('#clearArchiveDialog').addEventListener('close', () => { window.clearDialogClosed = true; }, { once: true });
+      });
+      await page.locator('#clearArchiveDialog').getByRole('button', { name: '保留资料' }).click();
+      await page.waitForFunction(() => window.clearDialogClosed);
+      await page.evaluate(() => document.querySelector('#clearData').click());
+    }
     await page.locator('#clearArchiveForm button[type=submit]').click();
     const stopped = await page.evaluate(target => ({
       cancelled: window.archiveRequests.some(item => item.url.includes(target) && item.aborted),
+      clearStatus: document.querySelector('#clearArchiveStatus').textContent,
+      clearOpen: document.querySelector('#clearArchiveDialog').open,
       state: JSON.parse(localStorage.getItem('xiaoyuji-learning-state-v1')),
       db: localStorage.getItem('xiaoyuji-local-student-db-v1')
     }), target);
     release();
+    releaseEnrichment();
+    assert.equal(stopped.clearOpen, false, `Clearing data was rejected: ${stopped.clearStatus}`);
     assert.equal(stopped.cancelled, true, `Clearing data must abort pending ${stage}`);
     assert.equal(stopped.state.profile.configured, false);
     assert.equal(stopped.state.session.status, 'idle');
@@ -271,7 +353,7 @@ try {
     await page.evaluate(async () => (await import('/src/services/indexedArchive.js')).flushDurableArchive());
     assert.equal(await page.evaluate(() => localStorage.getItem('xiaoyuji-local-student-db-v1')), null);
     assert.deepEqual(errors, []);
-    console.log(`PASS clearing data cancels pending ${stage} and rejects late work`);
+    console.log(`PASS clearing data cancels pending ${stage} and rejects late work${archiveChanges ? ' after reconfirming background changes' : ''}`);
     await context.close();
   }
 } finally { await browser.close(); }
