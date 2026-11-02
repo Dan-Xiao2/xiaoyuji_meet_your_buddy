@@ -2,9 +2,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInitialState } from "../src/data/studentModel.js";
-import { createQuickTutorReplyWithQwen, quickModel } from "../server/qwenTutor.mjs";
+import { quickModel } from "../server/qwenTutor.mjs";
 import { generateOpenDrawing, imageConfig } from "../server/openDrawing.mjs";
 import { loadLocalEnv } from "../server/env.mjs";
+import { collectConversationTurn } from "./benchmark-conversation-turn.mjs";
+import { execFileSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const args = new Set(process.argv.slice(2));
@@ -16,11 +18,16 @@ if (!process.env.QWEN_API_KEY || process.env.QWEN_API_KEY.startsWith("replace_me
   throw new Error("QWEN_API_KEY is required for the real-model benchmark.");
 }
 
+const replyMode = process.argv.find(value => value.startsWith("--reply-mode="))?.slice("--reply-mode=".length) || "quick";
+if (!["quick", "stream"].includes(replyMode)) throw new Error("--reply-mode must be quick or stream");
+const suite = process.argv.find(value => value.startsWith("--suite="))?.slice("--suite=".length) || "conversation";
+if (!["conversation", "context"].includes(suite)) throw new Error("--suite must be conversation or context");
+const fixturePath = `benchmarks/fixtures/${suite === "context" ? "conversation-context" : "conversation-quality"}.json`;
 const repeats = integerArg("--repeats", 1, 1, 5);
 const maxTurns = integerArg("--max-turns", 100, 1, 100);
 const includeImages = args.has("--include-images");
 const selectedIds = process.argv.find(value => value.startsWith("--scenarios="))?.slice("--scenarios=".length).split(",");
-const allCases = await readJson(resolve(root, "benchmarks/fixtures/conversation-quality.json"));
+const allCases = await readJson(resolve(root, fixturePath));
 if (selectedIds?.some(id => !allCases.some(item => item.id === id))) throw new Error("Unknown conversation scenario");
 const conversationCases = selectedIds ? allCases.filter(item => selectedIds.includes(item.id)) : allCases;
 const textCallLimit = integerArg("--max-text-calls", 100, 1, 100);
@@ -47,13 +54,13 @@ for (let repeat = 0; repeat < repeats; repeat += 1) {
     const state = createInitialState();
     state.profile = { ...state.profile, name: "虚构测试孩子", ageBand: "4-5", configured: true, consent: true };
     state.activeSpeaker = { role: "child", name: "虚构测试孩子" };
+    state.messages.push(...(scenario.seedMessages || []).map(message => ({ ...message })));
     const previousQuestions = [];
     for (let turnIndex = 0; turnIndex < Math.min(scenario.turns.length, maxTurns); turnIndex += 1) {
       const turn = scenario.turns[turnIndex];
       state.messages.push({ role: "child", speakerRole: "child", speakerName: "虚构测试孩子", text: turn.input });
-      const started = performance.now();
-      const result = await createQuickTutorReplyWithQwen(turn.input, state, "我听到了，我们继续说。", {});
-      const latencyMs = Math.round(performance.now() - started);
+      const result = await collectConversationTurn(turn.input, state, { mode: replyMode });
+      const latencyMs = result.latencyMs;
       const questions = extractQuestions(result.reply);
       const repeatedQuestions = questions.filter(question => previousQuestions.some(previous => similarity(question, previous) >= 0.72));
       previousQuestions.push(...questions);
@@ -63,6 +70,10 @@ for (let repeat = 0; repeat < repeats; repeat += 1) {
         kind: "conversation",
         scenarioId: scenario.id,
         description: scenario.description,
+        reviewCriteria: scenario.humanReviewCriteria || [],
+        seedMessages: scenario.seedMessages || [],
+        // Includes actual preceding model replies; seeded history is explicitly labelled above.
+        history: state.messages.map(message => ({ role: message.role, text: message.text })),
         repeat,
         turn: turnIndex + 1,
         input: turn.input,
@@ -73,6 +84,11 @@ for (let repeat = 0; repeat < repeats; repeat += 1) {
         fallback: result.llmStatus?.fallback === true,
         failureReason: result.llmStatus?.message || null,
         latencyMs,
+        firstTextMs: result.firstTextMs,
+        releasedSegments: result.releasedSegments,
+        stoppedBy: result.llmStatus?.stoppedBy || null,
+        groundingFallback: result.llmStatus?.groundingFallback === true,
+        drawingClaimFallback: result.llmStatus?.drawingClaimFallback === true,
         tokenUsage,
         estimatedCost: estimateTextCost(tokenUsage, pricing),
         topicPassed: topic.passed,
@@ -108,11 +124,17 @@ const repeatedQuestionCount = sum(rows.map(row => row.repeatedQuestionCount));
 const textCost = sumKnown(rows.map(row => row.estimatedCost));
 const imageCost = sumKnown(drawingRows.map(row => row.estimatedCost));
 const report = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   mode: "live-provider",
   configuration: {
     provider: "qwen",
+    replyMode,
+    suite,
+    fixturePath,
+    gitRevision: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(),
+    workingTreeDirty: Boolean(execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim()),
+    turnGuidanceEnabled: process.env.QUICK_TURN_GUIDANCE !== "false",
     // The spoken quick reply has its own model (QWEN_QUICK_MODEL); QWEN_MODEL is background enrichment.
     requestedTextModel: quickModel(),
     requestedImageModel: includeImages ? imageConfig({ ...process.env, IMAGE_DRAWING_ENABLED: "true" }).model : null,
@@ -129,6 +151,7 @@ const report = {
     modelTurns: modelRows.length,
     localControlTurns: rows.length - modelRows.length,
     providerFallbacks: modelRows.filter(row => row.fallback || !row.providerUsed).length,
+    interruptedReplies: rows.filter(row => row.stoppedBy || row.failureReason).length,
     unexpectedProviderCalls: rows.filter(row => row.expectedProvider === "local" && row.providerUsed).length,
     topicFollowingRate: rate(rows.filter(row => row.topicPassed).length, rows.length),
     repeatedQuestionRate: rate(repeatedQuestionCount, questionCount),
@@ -149,7 +172,9 @@ const report = {
   },
   limitations: [
     "Fixed synthetic prompts are regression indicators, not evidence of child usability.",
-    "Reply latency is end-to-end non-streaming text latency, not first-audio latency.",
+    "Latency measures server text generation. firstTextMs measures the first released segment, which can be a comma clause, not a full sentence or first audio.",
+    "Stream mode uses the production server generator, but does not exercise HTTP, browser playback, ASR, or background extraction.",
+    "Seed messages are scripted context, not actual previous model output. Subsequent turns use actual generated replies.",
     "Topic matching is deterministic keyword/regex scoring and requires human review.",
     "Image success reflects the current automated reviewer and still requires visual inspection.",
     "Estimated cost is null or partial unless current account pricing is configured."
@@ -158,7 +183,7 @@ const report = {
 const target = resolve(reportFolder, "report.json");
 await writeFile(target, JSON.stringify(report, null, 2));
 console.log(JSON.stringify({ report: target, summary: report.summary }, null, 2));
-if (report.summary.providerFallbacks || report.summary.unexpectedProviderCalls || report.summary.topicFollowingRate < 0.8 || report.summary.repeatedQuestionRate > 0.2 ||
+if (report.summary.interruptedReplies || report.summary.providerFallbacks || report.summary.unexpectedProviderCalls || report.summary.topicFollowingRate < 0.8 || report.summary.repeatedQuestionRate > 0.2 ||
   (includeImages && report.summary.drawingEditSuccessRate < 0.8)) process.exitCode = 1;
 
 async function runDrawingStep(scenario, operation, instruction, image, env) {

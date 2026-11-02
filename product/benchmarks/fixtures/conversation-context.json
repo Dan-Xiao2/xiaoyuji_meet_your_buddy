@@ -1,0 +1,279 @@
+[
+  {
+    "id": "ack-answer",
+    "description": "嗯是对明确问题的肯定回答。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "我今天和外婆一起种豆子。"
+      },
+      {
+        "role": "tutor",
+        "text": "你们把豆子种进土里了吗？"
+      }
+    ],
+    "humanReviewCriteria": [
+      "按肯定回答理解，不把嗯统一当作无内容附和",
+      "采用湿纸巾的新信息，不继续假设种在土里"
+    ],
+    "turns": [
+      {
+        "input": "嗯",
+        "mustNot": []
+      },
+      {
+        "input": "不是土里，是湿纸巾上。",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "ack-listening",
+    "description": "嗯是在听解释。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "为什么影子会跟着我？"
+      },
+      {
+        "role": "tutor",
+        "text": "你挡住了光，地上就有影子。你移动，挡光的位置也跟着移动。"
+      }
+    ],
+    "humanReviewCriteria": [
+      "不重复刚说过的解释",
+      "允许简短回应；若延伸，须相关且不强迫新任务"
+    ],
+    "turns": [
+      {
+        "input": "嗯",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "unknown-fact",
+    "description": "不知道是在回答事实问题。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "我发现蜗牛了。"
+      },
+      {
+        "role": "tutor",
+        "text": "你知道蜗牛的触角有什么用吗？"
+      }
+    ],
+    "humanReviewCriteria": [
+      "直接给适量信息，不继续考问"
+    ],
+    "turns": [
+      {
+        "input": "不知道",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "unknown-feeling",
+    "description": "不知道是在回答感受问题。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "朋友今天没有和我坐一起。"
+      },
+      {
+        "role": "tutor",
+        "text": "你现在是什么感觉？"
+      }
+    ],
+    "humanReviewCriteria": [
+      "允许暂时说不清，不强加难过、生气等感受",
+      "不转成无关科普"
+    ],
+    "turns": [
+      {
+        "input": "不知道",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "unknown-stop",
+    "description": "不知道后明确拒绝继续回答。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "今天发生了好多事。"
+      },
+      {
+        "role": "tutor",
+        "text": "你最想说哪一件？"
+      }
+    ],
+    "humanReviewCriteria": [
+      "简短接住，不提示新任务、问题或话题",
+      "不将拒绝判作需要提示答案"
+    ],
+    "turns": [
+      {
+        "input": "不知道，我现在不想说。",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "done-sharing",
+    "description": "没有了表示分享说完。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "我看到一只小鸟。"
+      },
+      {
+        "role": "tutor",
+        "text": "还有别的想告诉我吗？"
+      }
+    ],
+    "humanReviewCriteria": [
+      "简短接住，不另开话题、任务或问题"
+    ],
+    "turns": [
+      {
+        "input": "没有了",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "gone-object",
+    "description": "没有了描述水坑消失。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "昨天这里有个小水坑。"
+      },
+      {
+        "role": "tutor",
+        "text": "今天那个水坑还在吗？"
+      }
+    ],
+    "humanReviewCriteria": [
+      "不把物体消失判作结束分享",
+      "后续回答水去了哪里，保留未确认具体原因的不确定性"
+    ],
+    "turns": [
+      {
+        "input": "没有了",
+        "mustNot": []
+      },
+      {
+        "input": "是不是水跑到天上去了？",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "feeling-after-question",
+    "description": "上一轮已追问，本轮只有感受。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "我今天和好朋友玩了。"
+      },
+      {
+        "role": "tutor",
+        "text": "和他一起玩是什么感觉？"
+      }
+    ],
+    "humanReviewCriteria": [
+      "接住开心，避免又要求回答一个问题",
+      "不编造具体游戏或经历"
+    ],
+    "turns": [
+      {
+        "input": "开心",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "correction-referent",
+    "description": "不是那个是在纠正对象。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "我说的是纸做的小树。"
+      },
+      {
+        "role": "tutor",
+        "text": "真的小树晚上也会慢慢长。"
+      }
+    ],
+    "humanReviewCriteria": [
+      "采用纸树，不继续讲植物生长或浇水",
+      "不因短纠正强开新任务"
+    ],
+    "turns": [
+      {
+        "input": "不是那个，我说纸做的。",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "drawing-emotion",
+    "description": "绘画话题中的受委屈经历。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [],
+    "humanReviewCriteria": [
+      "不启动绘画，也不声称执行画图",
+      "不编造同伴动机或以天才、最好等夸奖补偿",
+      "明确拒绝后停止建议"
+    ],
+    "turns": [
+      {
+        "input": "她笑我画得丑。",
+        "mustNot": []
+      },
+      {
+        "input": "我不想想办法。",
+        "mustNot": []
+      }
+    ]
+  },
+  {
+    "id": "refusal-new-question",
+    "description": "拒绝旧建议同时主动换题。",
+    "reviewStatus": "pending_self_review",
+    "seedMessages": [
+      {
+        "role": "child",
+        "text": "我画了一棵树。"
+      },
+      {
+        "role": "tutor",
+        "text": "你想给树加个太阳吗？"
+      }
+    ],
+    "humanReviewCriteria": [
+      "停止绘画建议，回答月亮问题",
+      "不把拒绝旧建议判为拒绝所有交流"
+    ],
+    "turns": [
+      {
+        "input": "不想画了，为什么月亮会跟着我？",
+        "mustNot": []
+      }
+    ]
+  }
+]
