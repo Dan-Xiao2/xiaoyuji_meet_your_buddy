@@ -10,6 +10,9 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
   let failure = null, readyDetail = "";
   // Barge-in: while a reply plays, a speaking child stops it and is listened to (context.bargeIn).
   let bargeWatch = null, playStartedAt = null;
+  // A voice interruption waiting for the recogniser to hear a character: { revision } of the
+  // playback that goes on quietly meanwhile. rearmWatch listens again if it was not the child.
+  let tentative = null, rearmWatch = null;
   // A transcript that stopped mid-thought, waiting for the rest (at most MAX_HOLDS times per turn).
   let heldText = "", holds = 0;
   const MAX_HOLDS = 2, CONTINUE_WAIT_MS = 4000;
@@ -44,7 +47,16 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     bargeWatch = null;
   }
 
+  // Before playback stops: which whole sentences the child heard (streamed replies only). A reply
+  // whose every sentence had already played (only its tail was left) is not marked.
+  function markInterrupted() {
+    const delivery = voice.heardSoFar?.() || null;
+    if (delivery?.complete) return;
+    onBargeIn(replyMessageId, delivery ? { heard: delivery.heard } : {});
+  }
+
   function stopOutput() {
+    tentative = null; rearmWatch = null;
     stopWatch();
     playbackRevision++;
     output = "idle";
@@ -99,7 +111,30 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     onChange();
   }
 
-  function beginInput({ automated = false, afterBargeIn = false, continuing = false } = {}) {
+  // The recogniser heard a character during a tentative interruption: now Xiaoyu stops.
+  function confirmBargeIn() {
+    const pending = tentative;
+    tentative = null;
+    if (!pending || pending.revision !== playbackRevision || output === "idle") return;
+    onTiming({ stage: "barge-in-confirmed", latencyMs: clock.now() - playStartedAt });
+    if (replyMessageId) markInterrupted();
+    stopOutput();
+    onChange();
+  }
+
+  // Nothing was recognised: it was not the child. Xiaoyu's volume comes back and she listens for
+  // an interruption again; if her reply ended meanwhile, listening resumes as after any reply.
+  function dismissBargeIn() {
+    const pending = tentative;
+    tentative = null;
+    voice.duckPlayback?.(false);
+    onTiming({ stage: "barge-in-dismissed", latencyMs: 0 });
+    if (!pending || pending.revision !== playbackRevision || output === "idle") { schedule(); return; }
+    rearmWatch?.();
+    onChange();
+  }
+
+  function beginInput({ automated = false, afterBargeIn = false, continuing = false, tentative: provisional = false } = {}) {
     const context = { ...getContext() };
     const blocked = listenBlock(context, automated);
     if (blocked) { emit("media.listen-skipped", { reason: blocked }); return; }
@@ -107,9 +142,9 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     ui.beforeListen();
     if (!automated) { voice.preparePlayback(); autoListen = true; }
     // Tapping to talk while Xiaoyu speaks also cuts the reply short; the next turn must know.
-    if (!automated && !afterBargeIn && output === "playing" && replyMessageId) onBargeIn(replyMessageId);
+    if (!automated && !afterBargeIn && output === "playing" && replyMessageId) markInterrupted();
     clearTimer();
-    stopOutput();
+    if (!provisional) stopOutput();
     // afterBargeIn: a capture that follows a barge-in and hears nothing suggests a false trigger.
     const revision = ++captureRevision;
     const captureIdentity = { sessionId: context.sessionId, captureRevision: revision };
@@ -134,6 +169,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
         if (continuing) ui.transcript("我在听，你接着说。");
       },
       onLevel: level => { if (live() && input === "capturing") onLevel(level); },
+      onHeard: () => { if (live() && provisional) confirmBargeIn(); },
       onTiming: timing => { if (live()) onTiming(timing); },
       onProcessing: () => {
         if (!live(true)) return;
@@ -147,6 +183,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
         if (!live(true)) return;
         // "Xiaoyu did not hear me" cases are counted for the family pilot: errors, no speech, nothing recognised.
         onTiming({ stage: "capture-error", latencyMs: 0 });
+        if (provisional && tentative) { stopCapture(); dismissBargeIn(); return; }
         emit("media.capture-failed", captureIdentity);
         pause();
         failure = "capture";
@@ -158,6 +195,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
         if (heldText) { release(revision); return; }
         onTiming({ stage: "capture-idle", latencyMs: 0 });
         if (afterBargeIn) onTiming({ stage: "barge-in-empty", latencyMs: 0 });
+        if (provisional && tentative) { stopCapture(); ui.transcript(""); dismissBargeIn(); return; }
         pause({ detail: "我先等一等，点我继续聊" });
         ui.transcript("");
       },
@@ -171,8 +209,11 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
           if (heldText) { release(revision); return; }
           onTiming({ stage: "capture-empty", latencyMs: 0 });
           if (afterBargeIn) onTiming({ stage: "barge-in-empty", latencyMs: 0 });
+          if (provisional && tentative) { dismissBargeIn(); return; }
           pause(); return;
         }
+        // Recognised text without the early signal (batch recognition): the child it was.
+        if (provisional && tentative) confirmBargeIn();
         const said = joinUtterance(heldText, text);
         if (looksUnfinished(said) && holds < MAX_HOLDS) {
           heldText = said; holds++;
@@ -281,18 +322,26 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
           if (settled || output === "playing") { emit("media.callback-rejected", { ...playbackIdentity, reason: "settled", segmentIndex: index }); return; }
           output = "playing";
           emit("media.play-started", { ...playbackIdentity, segmentIndex: index });
-          if (!bargeWatch && !farewell && context.bargeIn && voice.watchForBargeIn) {
-            playStartedAt = clock.now();
+          const startWatch = () => {
+            if (bargeWatch || farewell || !context.bargeIn || !voice.watchForBargeIn) return;
             bargeWatch = voice.watchForBargeIn(() => {
               bargeWatch = null;
               if (!live(true) || output === "idle") return;
               onTiming({ stage: "barge-in", latencyMs: clock.now() - playStartedAt });
               emit("media.barge-in", playbackIdentity);
+              // A loud sound is not yet the child (a dog's bark stopped Xiaoyu in the pilot): she goes
+              // quiet and listening starts; she stops once a character is recognised, or carries on.
+              if (voice.duckPlayback?.(true)) { tentative = { revision }; beginInput({ afterBargeIn: true, tentative: true }); return; }
               // The child did not hear the rest of this reply; the next model turn must know that.
               // Read at trigger time: a streamed reply is attached to its message only once committed.
-              if (replyMessageId) onBargeIn(replyMessageId);
+              if (replyMessageId) markInterrupted();
               beginInput({ afterBargeIn: true });
             }, { onEnd: (stats, reason) => onTiming({ stage: "barge-in-watch", latencyMs: clock.now() - playStartedAt, reason, levels: stats }) });
+          };
+          if (!bargeWatch && !farewell && context.bargeIn && voice.watchForBargeIn) {
+            playStartedAt = clock.now();
+            rearmWatch = () => { if (live()) startWatch(); };
+            startWatch();
           }
           if (steps && previousEnd !== null) {
             onTiming({ stage: "drawing-segment-gap", latencyMs: clock.now() - previousEnd });

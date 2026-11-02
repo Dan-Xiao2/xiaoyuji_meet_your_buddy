@@ -3,12 +3,13 @@
 // Only allow-listed fields are stored. Never text, audio, names, or anything a child said.
 const STORAGE_KEY = "xiaoyuji-pilot-log-v1";
 const CODE = /^[a-z0-9-]{1,40}$/;
-const SAME_TURN = new Set(["quick-reply", "barge-in-watch"]);
-const LEVEL_KEYS = ["micPeak", "outPeak", "coupling", "thresholdMin", "bestMargin", "echoCancellation", "echoReduction", "echoDelayMs"];
+// Events that belong to the turn in progress rather than starting a new one.
+const SAME_TURN = new Set(["quick-reply", "barge-in-watch", "barge-in-confirmed", "barge-in-dismissed", "audio-device-change", "playback-state"]);
+const LEVEL_KEYS = ["micPeak", "outPeak", "coupling", "thresholdMin", "bestMargin", "echoCancellation", "echoReduction", "echoDelayMs", "rawPeak", "reopens", "trackMuted", "headset", "inputKind", "inputs"];
 // Fallbacks, and the "did not hear the child" cases: capture errors, no speech, nothing recognised,
 // and interruptions that heard nothing (likely false triggers).
 const FAILURE_STAGES = new Set(["asr-realtime-fallback", "tts-stream-fallback", "tts-cloud-failed", "tts-cloud-mp3",
-  "capture-error", "capture-idle", "capture-empty", "barge-in-empty", "playback-not-running"]);
+  "capture-error", "capture-idle", "capture-empty", "barge-in-empty", "playback-not-running", "playback-state"]);
 
 function percentile(sorted, p) {
   if (!sorted.length) return null;

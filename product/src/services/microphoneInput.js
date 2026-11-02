@@ -51,6 +51,31 @@ export async function openMicrophone({ voiceProcessing = true } = {}) {
   return stream;
 }
 
+// Whether the microphone in use is a headset's (AirPods and other Bluetooth or wired headsets), from
+// the track label the browser reports once permission is granted. Only this yes/no is kept.
+const HEADSET = /airpods|bluetooth|蓝牙|耳机|headset|headphone|earpods|beats|buds|hands-?free|免提/i;
+export function isHeadsetInput(stream) {
+  return inputKind(stream) === 2;
+}
+
+// What kind of microphone a stream comes from, as a number for the pilot log (never the label,
+// which can contain a person's name): 0 no label, 1 the device's own, 2 a headset, 3 other.
+// On an iPhone with AirPods the label did not say so (pilot, 2026-11-02), hence also inputCount.
+const BUILT_IN = /iphone|ipad|built-?in|内置|麦克风$|microphone$/i;
+export function inputKind(stream) {
+  const label = String(stream?.getAudioTracks?.()[0]?.label || "");
+  if (!label) return 0;
+  if (HEADSET.test(label)) return 2;
+  if (BUILT_IN.test(label)) return 1;
+  return 3;
+}
+
+// How many microphones the browser offers; a connected headset usually adds one.
+export async function inputCount() {
+  try { return (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === "audioinput").length; }
+  catch { return 0; }
+}
+
 export function microphoneError(error) {
   if (["NotFoundError", "OverconstrainedError"].includes(error?.name)) return "找不到所选麦克风，请在家庭设置中重新选择。";
   if (["NotAllowedError", "SecurityError"].includes(error?.name)) return "麦克风未获允许，请检查浏览器或系统的麦克风权限。";

@@ -39,3 +39,11 @@ test("capture errors distinguish missing device, denied permission and hardware 
   assert.match(microphoneError({ name: "NotAllowedError" }), /权限/);
   assert.match(microphoneError({ name: "NotReadableError" }), /设备连接/);
 });
+
+test("a headset microphone is recognised from its track label", async () => {
+  const { isHeadsetInput } = await import("../src/services/microphoneInput.js");
+  const stream = label => ({ getAudioTracks: () => [{ label }] });
+  for (const label of ["AirPods Pro", "Dan的AirPods", "Bluetooth Headset", "蓝牙耳机", "Beats Studio Buds"]) assert.equal(isHeadsetInput(stream(label)), true, label);
+  for (const label of ["iPhone 麦克风", "iPhone Microphone", "Default", ""]) assert.equal(isHeadsetInput(stream(label)), false, label);
+  assert.equal(isHeadsetInput(null), false);
+});

@@ -21,7 +21,10 @@ export function createTutorContext(state = {}) {
       .filter(message => ["child", "tutor"].includes(message.role)).slice(-12).map(message => ({
         role: message.role, text: text(message.text, 4000),
         speakerName: text(message.speakerName, 80), speakerRole: text(message.speakerRole, 30),
-        ...(message.role === "tutor" && message.interrupted === true ? { interrupted: true } : {})
+        ...(message.role === "tutor" && message.interrupted === true ? { interrupted: true } : {}),
+        // Only a beginning of the reply counts as what was heard.
+        ...(message.role === "tutor" && message.interrupted === true && typeof message.heard === "string" && String(message.text).startsWith(message.heard)
+          ? { heard: text(message.heard, 4000) } : {})
       })),
     memory: { interests: texts(state.memory?.interests, 6, 80), recentWins: texts(state.memory?.recentWins, 4, 100) },
     board: { type: "blank" },

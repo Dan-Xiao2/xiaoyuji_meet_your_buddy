@@ -23,19 +23,21 @@ test("quick reply sentences reach the page while the turn is current, and stop o
   await run;
 });
 
-function harness() {
+function harness({ heard = null, duck = false } = {}) {
   const context = { sessionId: "one", active: true, canListen: true, pending: false, bargeIn: true };
-  const sinks = [], timings = [], interrupted = [], watches = [];
-  const voice = { recordingSupported: true, preparePlayback() {}, stopListening() {}, stopSpeaking() {}, finishListening() {},
-    listen() {}, speak() { return true; }, prefetchSpeech() {},
+  const sinks = [], timings = [], interrupted = [], watches = [], deliveries = [], listens = [], ducks = [];
+  let stops = 0;
+  const voice = { recordingSupported: true, preparePlayback() {}, stopListening() {}, stopSpeaking() { stops++; }, finishListening() {},
+    listen(callbacks) { listens.push(callbacks); }, speak() { return true; }, prefetchSpeech() {}, heardSoFar: () => heard,
+    duckPlayback(on) { ducks.push(on); return duck; },
     speakSentences(callbacks) { const sink = { callbacks, pushed: [], ended: false, push(t) { this.pushed.push(t); }, end() { this.ended = true; } }; sinks.push(sink); return sink; },
     watchForBargeIn(onBargeIn) { const watch = { onBargeIn, stop() {} }; watches.push(watch); return watch; } };
   const session = createVoiceSession({ voice, getContext: () => context, onInput() {}, onTiming: item => timings.push(item.stage), onLevel() {},
-    onBargeIn: id => interrupted.push(id),
+    onBargeIn: (id, delivery) => { interrupted.push(id); deliveries.push(delivery); },
     ui: { beforeListen() {}, captureStart() {}, transcript() {}, captureError() {}, clearSpeechError() {}, speechError() {} },
     narration: { stop() {}, prepare() {}, step() {}, replay() {} },
     clock: { now: () => 0, setTimeout: () => 1, clearTimeout() {} } });
-  return { session, sinks, timings, interrupted, watches };
+  return { session, sinks, timings, interrupted, watches, deliveries, listens, ducks, stops: () => stops };
 }
 
 test("a streamed reply plays as sentences arrive, links to its message once committed, and resumes listening at the end", () => {
@@ -88,4 +90,75 @@ test("tapping to talk while a reply plays marks that reply as not heard to the e
   assert.deepEqual(h.interrupted, ["turn-2:tutor"]);
   h.session.beginInput();
   assert.deepEqual(h.interrupted, ["turn-2:tutor"], "a tap while nothing plays marks nothing");
+});
+
+test("an interruption passes on the whole sentences the child heard; a reply already fully played is not marked", () => {
+  let h = harness({ heard: { heard: "蜗牛背着小房子。", complete: false } });
+  let reply = h.session.playStreamingReply();
+  reply.push("蜗牛背着小房子。"); reply.push("它爬过的地方亮晶晶的。");
+  h.sinks[0].callbacks.onStart();
+  reply.attach("turn-2:tutor");
+  h.watches[0].onBargeIn(); // the child spoke over the second sentence
+  assert.deepEqual(h.interrupted, ["turn-2:tutor"]);
+  assert.deepEqual(h.deliveries, [{ heard: "蜗牛背着小房子。" }]);
+
+  h = harness({ heard: { heard: "蜗牛背着小房子。", complete: true } });
+  reply = h.session.playStreamingReply();
+  reply.push("蜗牛背着小房子。"); reply.end();
+  h.sinks[0].callbacks.onStart();
+  reply.attach("turn-3:tutor");
+  h.session.beginInput(); // a tap during the last moment of sound
+  assert.deepEqual(h.interrupted, [], "every sentence had been heard");
+
+  h = harness(); // whole-reply playback: which part was heard is unknown
+  reply = h.session.playStreamingReply();
+  reply.push("蜗牛背着小房子。");
+  h.sinks[0].callbacks.onStart();
+  reply.attach("turn-4:tutor");
+  h.session.beginInput();
+  assert.deepEqual(h.deliveries, [{}]);
+});
+
+test("a voice interruption only quietens Xiaoyu until a character is heard; a bark lets her carry on", () => {
+  const start = (h) => {
+    const reply = h.session.playStreamingReply();
+    reply.push("蜗牛背着小房子。"); reply.push("它爬过的地方亮晶晶的。");
+    h.sinks[0].callbacks.onStart();
+    reply.attach("turn-2:tutor");
+    return reply;
+  };
+  // The child: quiet first, then stopped once the recogniser hears a character.
+  let h = harness({ duck: true, heard: { heard: "蜗牛背着小房子。", complete: false } });
+  start(h);
+  const stopsBefore = h.stops();
+  h.watches[0].onBargeIn();
+  assert.deepEqual(h.ducks, [true]);
+  assert.equal(h.stops(), stopsBefore, "still speaking, quietly");
+  assert.deepEqual(h.interrupted, []);
+  assert.equal(h.listens.length, 1, "listening has started");
+  h.listens[0].onHeard();
+  assert.ok(h.stops() > stopsBefore, "stopped once the child was heard");
+  assert.deepEqual(h.interrupted, ["turn-2:tutor"]);
+  assert.deepEqual(h.deliveries, [{ heard: "蜗牛背着小房子。" }]);
+  assert.ok(h.timings.includes("barge-in-confirmed"));
+
+  // A dog's bark: nothing recognised, so the volume comes back and the interruption watch restarts.
+  h = harness({ duck: true });
+  start(h);
+  const before = h.stops();
+  h.watches[0].onBargeIn();
+  h.listens[0].onEnd("");
+  assert.deepEqual(h.ducks, [true, false]);
+  assert.equal(h.stops(), before, "Xiaoyu was never stopped");
+  assert.deepEqual(h.interrupted, []);
+  assert.equal(h.watches.length, 2, "listening for an interruption again");
+  assert.ok(h.timings.includes("barge-in-dismissed"));
+
+  // Speech that cannot be made quieter (not on the page's output) stops at once, as before.
+  h = harness({ duck: false });
+  start(h);
+  const earlier = h.stops();
+  h.watches[0].onBargeIn();
+  assert.ok(h.stops() > earlier);
+  assert.deepEqual(h.interrupted, ["turn-2:tutor"]);
 });

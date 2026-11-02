@@ -59,14 +59,15 @@ test("streams PCM before finish and returns a single final, never partial guesse
   ws.send(Buffer.from([0, 0, 1, 0])); await tick();
   assert.equal(upstream.events[1].type, "input_audio_buffer.append");
   upstream.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.text", text: "猜测", stash: "草稿" }));
-  await tick(); assert.equal(messages.length, 0);
+  await tick(); assert.deepEqual(messages, [{ type: "heard" }], "only that someone spoke, never the guess");
   ws.send(JSON.stringify({ type: "finish" })); await tick();
   assert.deepEqual(upstream.events.slice(-2).map(x => x.type), ["input_audio_buffer.commit", "session.finish"]);
   const closed = once(ws, "close");
   const final = JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: "画一个房子" });
   upstream.emit("message", final); upstream.emit("message", final);
   await closed;
-  assert.equal(messages.length, 1); assert.equal(messages[0].text, "画一个房子");
+  assert.equal(messages.length, 2); assert.equal(messages[1].text, "画一个房子");
+  assert.equal(JSON.stringify(messages).includes("猜测"), false);
   assert.equal(upstream.readyState, 3);
 });
 
@@ -138,4 +139,18 @@ test("foreign origins cannot open a paid upstream connection", async t => {
   const ws = new WebSocket(origin.replace("http", "ws") + "/api/asr/realtime", { origin: "https://other.invalid" });
   const [error] = await once(ws, "error");
   assert.match(error.message, /403/); assert.equal(upstreams.length, 0);
+});
+
+test("the first recognised character is signalled once, without its text, and not after finish", async t => {
+  const { client } = await fixture(t);
+  const { ws, upstream } = await client();
+  const messages = []; ws.on("message", raw => messages.push(JSON.parse(raw)));
+  ws.send(Buffer.from([0, 0, 1, 0])); await tick();
+  upstream.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.text", text: "", stash: "" }));
+  await tick(); assert.equal(messages.length, 0, "an empty partial (no speech) is not a person speaking");
+  upstream.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.text", text: "", stash: "草莓" }));
+  upstream.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.text", text: "草莓", stash: "多少" }));
+  await tick();
+  assert.deepEqual(messages, [{ type: "heard" }]);
+  assert.equal(JSON.stringify(messages).includes("草莓"), false, "no partial text leaves the server");
 });

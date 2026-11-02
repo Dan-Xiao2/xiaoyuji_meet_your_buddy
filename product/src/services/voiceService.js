@@ -2,7 +2,7 @@ import { createVoiceActivityDetector } from "./voiceActivity.js";
 import { createPcmPlayer } from "./pcmPlayer.js";
 import { cropRecordedAudio } from "./recordedAudio.js";
 import { createRealtimeCapture } from "./realtimeAsr.js";
-import { getMicrophoneId, openMicrophone, microphoneError } from "./microphoneInput.js";
+import { getMicrophoneId, openMicrophone, microphoneError, inputKind, inputCount } from "./microphoneInput.js";
 import { createBargeInDetector, startBargeInMonitor } from "./bargeIn.js";
 
 export function createVoiceController() {
@@ -35,6 +35,49 @@ export function createVoiceController() {
   let realtimeCapture = null;
   // A microphone stream opened by the barge-in monitor, waiting to be reused by the next capture.
   let handoffStream = null;
+  let headsetInUse = false; // the last listening microphone was a headset's (see watchForBargeIn)
+  // The microphone last opened, for the pilot log: its kind (see inputKind) and how many
+  // microphones were offered. A headset: its label says so, or a second microphone appeared while
+  // the label is not the device's own (with AirPods the label did not say AirPods).
+  const input = { kind: 0, count: 0 };
+  async function noteInput(stream) {
+    input.kind = inputKind(stream);
+    input.count = await inputCount();
+    headsetInUse = input.kind === 2 || (input.count >= 2 && input.kind !== 1);
+  }
+  // Audio events outside any one request (a headset connected or removed, playback interrupted by
+  // the system), for the pilot log. onAudioEvent(listener) registers the one listener.
+  let audioEventListener = () => {};
+  const audioEvent = (stage, details = {}) => { try { audioEventListener({ stage, latencyMs: 0, ...details }); } catch { /* diagnostics only */ } };
+  let currentMonitor = null;
+  // When a headset is connected or removed, iOS moves the sound to another device mid-reply: the
+  // pilot heard loud pops and lost Xiaoyu's voice. Xiaoyu's output is muted for the switch and
+  // faded back in, the barge-in microphone (now possibly the wrong one) is closed, and what the echo
+  // canceller learnt about the old speaker is dropped.
+  navigator.mediaDevices?.addEventListener?.("devicechange", async () => {
+    const count = await inputCount();
+    audioEvent("audio-device-change", { levels: { inputs: count } });
+    echoMemory = null;
+    headsetInUse = false;
+    currentMonitor?.stop(); currentMonitor = null;
+    if (outputBus && playbackContext) {
+      const gain = outputBus.gain, now = playbackContext.currentTime;
+      gain.cancelScheduledValues(now); gain.setValueAtTime(0, now); gain.setTargetAtTime(duckLevel, now + 0.3, 0.1);
+    }
+    if (playbackContext && playbackContext.state !== "running" && playbackContext.state !== "closed") playbackContext.resume().catch(() => {});
+  });
+
+  // A voice interruption is first only tentative: Xiaoyu goes quiet (not silent) until the
+  // recogniser hears a character, so a dog's bark or a door does not stop her. Returns false when
+  // her current speech is not on the page's output bus (then the interruption stops her at once).
+  let duckLevel = 1;
+  function duckPlayback(on) {
+    duckLevel = on ? 0.2 : 1;
+    if (!outputBus || !playbackContext) return false;
+    const gain = outputBus.gain, now = playbackContext.currentTime;
+    gain.cancelScheduledValues(now); gain.setTargetAtTime(duckLevel, now, 0.04);
+    return Boolean(pcmPlayer);
+  }
   let handoffTimer = null;
 
   function dropHandoff() {
@@ -63,10 +106,15 @@ export function createVoiceController() {
   // A raw stream is not handed to the following capture: without gain control a quiet child could
   // be missed, so listening reopens the microphone with normal processing.
   // onEnd(stats, reason) reports how detection went (numbers only), for the family pilot.
+  // With AirPods (or any headset) Xiaoyu does not leak into the microphone, and switching between
+  // the raw and the processed microphone made iOS hand over a silent stream after an interruption
+  // (pilot, 2026-11-02, AirPods). So with a headset the barge-in microphone is the normal one, and
+  // on a trigger it is handed to listening, which keeps the child's first words.
   function watchForBargeIn(onBargeIn, { onEnd = () => {} } = {}) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!recordingSupported || !secureEnough || !AudioContextClass) return { stop() {} };
-    const referenced = Boolean(pcmPlayer && outputAnalyser);
+    const headset = headsetInUse;
+    const referenced = Boolean(pcmPlayer && outputAnalyser) && !headset;
     // Without the canceller, level alone could not tell the child (~0.006–0.01 RMS on an iPhone)
     // from Xiaoyu's leak plus room echo (~0.004–0.006): it missed the child or stopped Xiaoyu by
     // itself (pilot, 2026-11-02). So without AudioWorklet the streamed path only allows tapping.
@@ -75,8 +123,13 @@ export function createVoiceController() {
     // is re-measured every second as the canceller converges, at the 90th percentile and twice
     // over, which kept Xiaoyu from interrupting herself while still catching the child in ~0.3 s.
     const detector = createBargeInDetector(referenced ? { absolute: 0.004, gapMs: 150, ratio: 2, couplingPercentile: 0.9, retrackMs: 1000 } : { absolute: 0.035 });
-    return startBargeInMonitor({ openStream: () => openMicrophone({ voiceProcessing: !referenced }), AudioContextClass, detector,
-      onEnd: (stats, reason) => onEnd({ ...stats, echoCancellation: referenced ? 0 : 1 }, reason),
+    const openStream = async () => {
+      const opened = await openMicrophone({ voiceProcessing: !referenced });
+      await noteInput(opened); // a headset found here takes effect from the next reply
+      return opened;
+    };
+    return currentMonitor = startBargeInMonitor({ openStream, AudioContextClass, detector,
+      onEnd: (stats, reason) => onEnd({ ...stats, echoCancellation: referenced ? 0 : 1, headset: headset ? 1 : 0, inputKind: input.kind, inputs: input.count }, reason),
       ...(referenced ? { meter: echoCancellingMeter } : {}),
       context: sharedAudioContext(), playbackLevel: referenced ? playbackLevel : () => 0, onTrigger: (opened) => {
         dropHandoff();
@@ -98,10 +151,14 @@ export function createVoiceController() {
     const node = new window.AudioWorkletNode(context, "echo-canceller", { numberOfInputs: 2, numberOfOutputs: 0,
       channelCount: 1, channelCountMode: "explicit", processorOptions: echoMemory || {} });
     const latest = { residual: 0, reference: 0, delayMs: 0 }, totals = { mic: 0, residual: 0 };
+    // A real microphone always has some noise (~0.0003 RMS or more); below 1e-5 is a dead stream.
+    let rawPeak = 0, silentReports = 0;
     node.port.onmessage = ({ data }) => {
       if (data?.type === "state") { echoMemory = { weights: data.weights, delay: data.delay, offset: data.offset }; node.port.close(); return; }
       if (data?.type !== "level") return;
       latest.residual = data.residual; latest.reference = data.reference; latest.delayMs = data.delayMs;
+      rawPeak = Math.max(rawPeak, data.mic);
+      silentReports = data.mic < 1e-5 ? silentReports + 1 : 0;
       if (data.reference > 0.001) { totals.mic += data.mic * data.mic; totals.residual += data.residual * data.residual; }
     };
     const reference = outputBus;
@@ -110,7 +167,8 @@ export function createVoiceController() {
     return {
       level: () => latest.residual,
       playback: () => latest.reference,
-      stats: () => ({ echoReduction: totals.residual > 0 ? 10 * Math.log10(totals.mic / totals.residual) : 0, echoDelayMs: latest.delayMs }),
+      silent: () => silentReports >= 38, // 0.6 s of 16 ms reports
+      stats: () => ({ echoReduction: totals.residual > 0 ? 10 * Math.log10(totals.mic / totals.residual) : 0, echoDelayMs: latest.delayMs, rawPeak }),
       dispose() {
         try { source.disconnect(node); } catch { /* already disconnected */ }
         try { reference?.disconnect(node); } catch { /* already disconnected */ }
@@ -150,7 +208,15 @@ export function createVoiceController() {
   function sharedAudioContext() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return null;
-    try { playbackContext ||= new AudioContextClass(); } catch { return null; }
+    try {
+      if (!playbackContext) {
+        playbackContext = new AudioContextClass();
+        // Interrupted by the system (a call, Siri, an audio device switch): recorded for the pilot.
+        playbackContext.addEventListener?.("statechange", () => {
+          if (playbackContext.state !== "running") audioEvent("playback-state", { reason: playbackContext.state });
+        });
+      }
+    } catch { return null; }
     return playbackContext;
   }
 
@@ -164,7 +230,7 @@ export function createVoiceController() {
     } catch { /* Whole-response cloud audio remains available. */ }
   }
 
-  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRecorder = false, preferRealtime = false, asrCorpus = "", noSpeechTimeoutMs }) {
+  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRecorder = false, preferRealtime = false, asrCorpus = "", noSpeechTimeoutMs }) {
     stopListening();
     finishRequested = false;
     const requestId = listeningRequestId;
@@ -175,7 +241,7 @@ export function createVoiceController() {
     }
 
     if (preferRecorder && recordingSupported) {
-      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime, asrCorpus, noSpeechTimeoutMs }, requestId);
+      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime, asrCorpus, noSpeechTimeoutMs }, requestId);
       return;
     }
 
@@ -262,7 +328,7 @@ export function createVoiceController() {
     if (recorder && recorder.state !== "inactive") recorder.stop();
   }
 
-  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime = false, asrCorpus = "", noSpeechTimeoutMs }, requestId) {
+  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime = false, asrCorpus = "", noSpeechTimeoutMs }, requestId) {
     if (!secureEnough) {
       onError?.("浏览器要求在 localhost 或 HTTPS 页面里使用麦克风。请用本地预览地址打开。");
       return;
@@ -275,6 +341,7 @@ export function createVoiceController() {
 
     try {
       const nextStream = takeHandoff() || await openMicrophone();
+      await noteInput(nextStream);
       if (requestId !== listeningRequestId || finishRequested) {
         nextStream.getTracks().forEach((track) => track.stop());
         if (requestId === listeningRequestId) onEnd?.("");
@@ -311,7 +378,7 @@ export function createVoiceController() {
     let realtime = null;
     if (preferRealtime) {
       try {
-        realtime = await createRealtimeCapture(stream, { onTiming, corpus: asrCorpus, context: sharedAudioContext() });
+        realtime = await createRealtimeCapture(stream, { onTiming, onHeard: () => { if (requestId === listeningRequestId) onHeard?.(); }, corpus: asrCorpus, context: sharedAudioContext() });
         if (requestId !== listeningRequestId || finishRequested) {
           realtime.cancel();
           if (requestId === listeningRequestId) { cleanupRecorderOnly(); onEnd?.(""); }
@@ -572,6 +639,19 @@ export function createVoiceController() {
   // timeline, so there is no gap between sentences. Returns { push(text), end() }; callbacks are as
   // for speak(). If nothing could be streamed, the whole reply is spoken by the usual path once it
   // has ended (an un-tapped whole-file play may still be blocked on iOS, as before).
+  // What the child has actually heard of the streamed reply playing now, whole sentences only: a
+  // sentence counts once its last sample has left the speaker (output latency included). A
+  // sentence cut off part-way is not counted, since there is no word timing to say how much of
+  // it was heard. null when no streamed reply is playing (the whole-reply path has no sentences).
+  let delivery = null;
+  function heardSoFar() {
+    if (!delivery || delivery.requestId !== speechRequestId || !playbackContext) return null;
+    const now = playbackContext.currentTime - (playbackContext.outputLatency || 0) - (playbackContext.baseLatency || 0);
+    let count = 0;
+    while (count < delivery.texts.length && delivery.ends[count] !== undefined && delivery.ends[count] <= now) count++;
+    return { heard: delivery.texts.slice(0, count).join(""), complete: delivery.ended && count === delivery.texts.length };
+  }
+
   function speakSentences(callbacks = {}) {
     stopSpeaking();
     const requestId = speechRequestId;
@@ -580,6 +660,7 @@ export function createVoiceController() {
     speechFetchController = controller;
     const texts = [], requests = [];
     let ended = false, wake = null, fallback = false, startedAt = 0;
+    delivery = { requestId, texts, ends: [], ended: false };
     const notify = () => { const resolve = wake; wake = null; resolve?.(); };
     const speakWhole = () => { if (live()) playSpeech(texts.join(""), callbacks, requestId, null); };
     const request = text => fetch("/api/speech/stream", { method: "POST", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(22000)]),
@@ -620,6 +701,7 @@ export function createVoiceController() {
               if (value?.length) player.push(value);
             }
           } finally { reader.releaseLock(); }
+          if (live()) delivery.ends[index] = player.scheduledEnd();
         }
         player.finish();
       } catch (error) {
@@ -634,6 +716,7 @@ export function createVoiceController() {
       callbacks.onTiming?.({ stage: "tts-stream-fallback", latencyMs: 0 });
       // Nothing was heard yet: speak the whole reply by the usual path once it is complete.
       fallback = true;
+      if (delivery?.requestId === requestId) delivery = null;
       if (ended) speakWhole();
     });
 
@@ -651,6 +734,7 @@ export function createVoiceController() {
       end() {
         if (!live() || ended) return;
         ended = true;
+        if (delivery?.requestId === requestId) delivery.ended = true;
         if (!texts.length) { callbacks.onEnd?.(); return; }
         if (fallback) speakWhole(); else notify();
       }
@@ -837,6 +921,7 @@ export function createVoiceController() {
     preparedSpeech = null;
     pcmPlayer?.stop();
     pcmPlayer = null;
+    if (duckLevel !== 1) duckPlayback(false); // the next reply starts at full volume
     if (speechFetchController) speechFetchController.abort();
     speechFetchController = null;
     cleanupAudioPlayer();
@@ -869,6 +954,9 @@ export function createVoiceController() {
     prefetchSpeech,
     stopSpeaking,
     speakSentences,
+    heardSoFar,
+    duckPlayback,
+    onAudioEvent(listener) { audioEventListener = typeof listener === "function" ? listener : () => {}; },
     watchForBargeIn
   };
 }

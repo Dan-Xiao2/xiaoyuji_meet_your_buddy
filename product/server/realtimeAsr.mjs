@@ -37,7 +37,7 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
     let upstream, done = false, ready = false, committed = false, bytes = 0, timer;
     // Recent conversation text sent by the browser before any audio. Passed to the recogniser as
     // context so a word already in the conversation wins over a same-sounding one (牛肝菌, not 牛杆菌).
-    let corpus = "", sessionSent = false;
+    let corpus = "", sessionSent = false, heard = false;
     const configure = () => {
       sessionSent = true;
       emit("session.update", { session: { modalities: ["text"], input_audio_format: "pcm", sample_rate: 16000,
@@ -86,6 +86,11 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
         done = true;
         send({ type: "final", text, audioSeconds: bytes / 32000 });
         close();
+      } else if (event.type === "conversation.item.input_audio_transcription.text") {
+        // The first recognised character means a person is speaking (a dog's bark or a door gives
+        // none). Only that signal is passed on, never the partial text: the page uses it to confirm a
+        // voice interruption before stopping Xiaoyu (pilot, 2026-11-02: a dog's bark stopped her).
+        if (!heard && !committed && String(event.text || event.stash || "").trim()) { heard = true; send({ type: "heard" }); }
       } else if (event.type === "error" || event.type === "conversation.item.input_audio_transcription.failed") {
         fail("recognition-failed");
       } else if (event.type === "session.finished") {

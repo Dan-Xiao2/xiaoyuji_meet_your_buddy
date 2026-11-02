@@ -217,3 +217,27 @@ test("with retracking the coupling follows the echo canceller down, never up", (
   run(steady, 520, 3000, 0.003);
   assert.equal(steady.stats().coupling, 0.01);
 });
+
+test("a microphone that delivers pure silence is reopened, at most twice, and reported", async () => {
+  const streams = [], meters = [];
+  const fakeStream = () => { const track = { stopped: false, muted: streams.length === 0, stop() { this.stopped = true; }, addEventListener() {} };
+    const stream = { track, getTracks: () => [track], getAudioTracks: () => [track] }; streams.push(stream); return stream; };
+  const context = { state: "running", createMediaStreamSource: () => ({ disconnect() {} }) };
+  const frames = [];
+  let ended = null;
+  const monitor = startBargeInMonitor({ openStream: async () => fakeStream(), context, onTrigger: () => assert.fail("must not trigger"),
+    onEnd: (stats, reason) => { ended = { stats, reason }; },
+    meter: () => { const meter = { level: () => 0, silent: () => true, stats: () => ({ rawPeak: 0 }), dispose() { this.disposed = true; } }; meters.push(meter); return meter; },
+    requestFrame: callback => { frames.push(callback); return frames.length; }, cancelFrame() {} });
+  await monitor.ready;
+  for (let i = 0; i < 10 && streams.length < 3; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(streams.length, 3, "opened once, then reopened twice");
+  assert.equal(streams[0].track.stopped, true); assert.equal(streams[1].track.stopped, true);
+  assert.equal(meters[0].disposed, true);
+  assert.ok(frames.length >= 1, "after the last reopen it keeps listening instead of reopening again");
+  monitor.stop();
+  assert.equal(ended.reason, "stopped");
+  assert.equal(ended.stats.reopens, 2);
+  assert.equal(ended.stats.trackMuted, 1);
+  assert.equal(streams[2].track.stopped, true);
+});

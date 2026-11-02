@@ -44,6 +44,8 @@ export function createPcmPlayer(context, { sampleRate = 24000, onStart, onEnd, d
       for (const source of sources) { source.onended = null; source.stop(); source.disconnect(); }
       sources.clear();
     },
-    hasAudio: () => received
+    hasAudio: () => received,
+    // Context time at which everything pushed so far will have played.
+    scheduledEnd: () => nextTime
   };
 }

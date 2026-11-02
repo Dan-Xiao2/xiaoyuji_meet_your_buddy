@@ -148,6 +148,8 @@ const persistence = createApplicationPersistence({
   onFailure: () => { document.querySelector("#storageWarning").hidden = false; }
 });
 const voice = createVoiceController();
+// Device switches and system interruptions, recorded with the turn in progress (numbers only).
+voice.onAudioEvent?.(timing => recordVoiceTiming(timing));
 const trace = runtimeDiagnostics.record;
 const conversation = createConversationController({ trace, onChange: requestVoiceRender });
 const drawingRequests = createDrawingRequestTracker({ trace, onChange: requestVoiceRender });
@@ -211,7 +213,9 @@ const bargeInToggle = document.querySelector("[data-barge-in]");
 // Replies the child spoke over. The next request marks them, so the model does not assume the child
 // heard (or accepted) the rest. Marked only in the next request's history, never on the reply that
 // is still the current turn's target, so in-flight commits are not disturbed.
-const interruptedReplies = new Set();
+// Replies the child cut short, by message id: { heard } is the whole sentences actually played
+// (streamed replies), absent when that is unknown.
+const interruptedReplies = new Map();
 if (bargeInToggle) {
   bargeInToggle.checked = getBargeInEnabled();
   bargeInToggle.addEventListener("change", () => setBargeInEnabled(bargeInToggle.checked));
@@ -258,7 +262,7 @@ const voiceSession = createVoiceSession({
   onInput: (text, source) => { dom.childInput.value = text; sendChildInput(text, source); },
   onTiming: recordVoiceTiming,
   onLevel: applyVoiceLevel,
-  onBargeIn: replyMessageId => interruptedReplies.add(replyMessageId)
+  onBargeIn: (replyMessageId, delivery = {}) => interruptedReplies.set(replyMessageId, delivery)
 });
 runtimeDiagnostics.register("conversation", conversation.getSnapshot);
 runtimeDiagnostics.register("drawingPlan", drawingRequests.getSnapshot);
@@ -700,7 +704,8 @@ async function sendChildInput(text, source = {}) {
   const stateForRequest = {
     ...state,
     messages: [
-      ...state.messages.map(message => (interruptedReplies.has(message.id) && !message.interrupted ? { ...message, interrupted: true } : message)),
+      ...state.messages.map(message => (interruptedReplies.has(message.id) && !message.interrupted
+        ? { ...message, interrupted: true, ...(typeof interruptedReplies.get(message.id).heard === "string" ? { heard: interruptedReplies.get(message.id).heard } : {}) } : message)),
       {
         role: "child",
         id: `${turn.turnId}:child`,

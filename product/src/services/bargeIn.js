@@ -76,49 +76,78 @@ export function createBargeInDetector({ warmupMs = 500, minSpeechMs = 300, absol
 // Xiaoyu's leak is removed, and the playback level aligned with it.
 // onEnd(stats, reason): called once when monitoring ends — reason "triggered", "stopped" or "open-failed".
 export function startBargeInMonitor({ openStream, AudioContextClass, context: shared = null, playbackLevel = () => 0, onTrigger, onEnd = () => {}, detector = createBargeInDetector(),
-  meter: createMeter = analyserMeter, now = () => performance.now(), requestFrame = callback => window.requestAnimationFrame(callback), cancelFrame = id => window.cancelAnimationFrame(id) }) {
+  meter: createMeter = analyserMeter, maxReopens = 2, now = () => performance.now(), requestFrame = callback => window.requestAnimationFrame(callback), cancelFrame = id => window.cancelAnimationFrame(id) }) {
   let stopped = false, frame = null, context = null, stream = null, source = null, meter = null, reported = false;
+  // On an iPhone the raw microphone sometimes delivered pure digital silence for a whole reply,
+  // mostly in the reply after a voice interruption (pilot, 2026-11-02, levels 0.000 while the child
+  // spoke). A meter that reports silence() then gets the microphone reopened, at most maxReopens times.
+  const health = { reopens: 0, trackMuted: 0 };
   const report = reason => {
     if (reported) return;
     reported = true;
-    try { onEnd({ ...(detector.stats?.() || {}), ...(meter?.stats?.() || {}) }, reason); } catch { /* diagnostics only */ }
+    try { onEnd({ ...(detector.stats?.() || {}), ...(meter?.stats?.() || {}), ...health }, reason); } catch { /* diagnostics only */ }
+  };
+  const detach = () => {
+    try { meter?.dispose(); } catch { /* already gone */ }
+    source?.disconnect(); source = null;
   };
   const release = ({ keepStream = false } = {}) => {
     stopped = true;
     if (frame !== null) cancelFrame(frame);
     frame = null;
-    try { meter?.dispose(); } catch { /* already gone */ }
-    source?.disconnect(); source = null;
+    detach();
     if (context && !shared && context.state !== "closed") context.close().catch(() => {});
     context = null;
     if (!keepStream && stream) stream.getTracks().forEach(track => track.stop());
     if (!keepStream) stream = null;
   };
-  const ready = (async () => {
-    try {
-      const microphone = await openStream();
-      if (stopped) { microphone.getTracks().forEach(track => track.stop()); return; }
-      stream = microphone;
+  const open = async () => {
+    const microphone = await openStream();
+    if (stopped) { microphone.getTracks().forEach(track => track.stop()); return false; }
+    stream = microphone;
+    if (!context) {
       context = shared || new AudioContextClass();
       if (context.state === "suspended") await context.resume().catch(() => {});
-      if (stopped) return;
-      source = context.createMediaStreamSource(stream);
-      const opened = await createMeter(context, source);
-      if (stopped) { try { opened.dispose(); } catch { /* already gone */ } return; }
-      meter = opened;
-      const tick = () => {
-        if (stopped) return;
-        const playback = meter.playback ? meter.playback() : playbackLevel();
-        if (detector.update(meter.level(), now(), playback).triggered) {
-          const handed = stream;
-          release({ keepStream: true });
-          report("triggered");
-          onTrigger(handed);
-          return;
-        }
-        frame = requestFrame(tick);
-      };
-      tick();
+      if (stopped) return false;
+    }
+    for (const track of stream.getAudioTracks?.() || []) {
+      if (track.muted) health.trackMuted = 1;
+      track.addEventListener?.("mute", () => { health.trackMuted = 1; });
+    }
+    source = context.createMediaStreamSource(stream);
+    const opened = await createMeter(context, source);
+    if (stopped) { try { opened.dispose(); } catch { /* already gone */ } return false; }
+    meter = opened;
+    return true;
+  };
+  const reopen = async () => {
+    health.reopens++;
+    detach();
+    stream?.getTracks().forEach(track => track.stop());
+    stream = null;
+    if (await open()) tick();
+  };
+  const tick = () => {
+    if (stopped) return;
+    if (meter.silent?.() && health.reopens < maxReopens) {
+      const dead = meter; // keeps its stats for the report until the new one is ready
+      meter = { level: () => 0, stats: () => dead.stats?.() || {}, dispose: () => dead.dispose() };
+      reopen().catch(() => { if (!stopped) { report("open-failed"); release(); } });
+      return;
+    }
+    const playback = meter.playback ? meter.playback() : playbackLevel();
+    if (detector.update(meter.level(), now(), playback).triggered) {
+      const handed = stream;
+      release({ keepStream: true });
+      report("triggered");
+      onTrigger(handed);
+      return;
+    }
+    frame = requestFrame(tick);
+  };
+  const ready = (async () => {
+    try {
+      if (await open()) tick();
     } catch {
       // Without a microphone the reply simply plays to the end, as before.
       report("open-failed");

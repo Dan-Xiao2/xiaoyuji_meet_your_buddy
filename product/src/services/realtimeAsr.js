@@ -2,7 +2,8 @@
 // used in this conversation over same-sounding ones.
 // context: the page's shared AudioContext (see voiceService.js), left open on release; without one
 // a private context is created and closed. Native rate: the worklet converts to 16 kHz itself.
-export async function createRealtimeCapture(stream, { onTiming, corpus = "", context: shared = null } = {}) {
+// onHeard: called once when the recogniser has heard the first character (no text is given).
+export async function createRealtimeCapture(stream, { onTiming, onHeard, corpus = "", context: shared = null } = {}) {
   const context = shared || new AudioContext();
   let node, source, socket, timer, flushTimer, flushResolve;
   let active = false, ready = false, stopped = false, finishing = false, settled = false;
@@ -87,6 +88,8 @@ export async function createRealtimeCapture(stream, { onTiming, corpus = "", con
           sendFinish();
         } else if (event.type === "final" && finishing && typeof event.text === "string" && event.text.trim()) {
           settle({ ok: true, text: event.text.trim(), audioSeconds: event.audioSeconds });
+        } else if (event.type === "heard") {
+          try { onHeard?.(); } catch { /* the page's reaction must not break recognition */ }
         } else if (event.type === "error") fail(event.code || "recognition-failed");
       };
     },

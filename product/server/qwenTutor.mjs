@@ -335,10 +335,16 @@ async function callQwenTutor(input, currentState, localState, knowledge, signal,
 }
 
 // A reply the child spoke over was not heard to the end, so it is marked in the history; the model
-// must not treat its content (for example a suggestion the child then rejects) as accepted.
+// must not treat its content (for example a suggestion the child then rejects) as accepted. When
+// the page knows which whole sentences were played (`heard`), only those are given as said and the
+// rest as unsaid, so the model can neither assume the child heard it nor simply carry on with it.
 function historyLine(message) {
   const name = message.speakerName || message.role;
-  return message.interrupted ? `${name}（说到一半被孩子打断，孩子可能没听完）: ${message.text}` : `${name}: ${message.text}`;
+  if (!message.interrupted) return `${name}: ${message.text}`;
+  if (typeof message.heard !== "string") return `${name}（说到一半被孩子打断，孩子可能没听完）: ${message.text}`;
+  const rest = message.text.slice(message.heard.length).trim();
+  if (!message.heard) return `${name}（刚开口就被孩子打断，孩子没听到这句；原本想说：${rest}）`;
+  return `${name}（说到这里被孩子打断）: ${message.heard}${rest ? `（没说出来：${rest}）` : ""}`;
 }
 
 // "听到你开心，小宇也觉得心里暖暖的" kept appearing when a child said only "开心", even when the
@@ -359,7 +365,7 @@ const conversationHookInstruction = "孩子愿意继续时，给孩子留一个�
 // "因为……。……。所以……。" pattern (6 of 8 sampled answers on 2026-11-02).
 // Seen on a real iPhone (2026-11-02): after the child said there was no "软软的沙子", Xiaoyu kept
 // talking about it; and speech recognition can turn words into same-sounding ones (牛肝菌 → 牛杆菌).
-const followChildInstruction = "孩子否定或纠正时（比如说“没有”“不是”“不对”），以孩子这句为准：当作“那里没有／不是这样”，不要猜成它的反面（比如“没有软软的沙子”不能理解成“沙子是硬的”），也不再追问被否定的东西；简短接住后，采用新信息；只有关键指代不清时才问一句，不要求孩子继续解释。被孩子打断的话不要接着讲完。孩子的话来自语音转写，可能有同音错字；结合上下文理解真正的意思，沿用前文已经出现的正确说法（例如前面说的是牛肝菌，就不要改成同音的别的词），不要纠正孩子的发音。";
+const followChildInstruction = "孩子否定或纠正时（比如说“没有”“不是”“不对”），以孩子这句为准：当作“那里没有／不是这样”，不要猜成它的反面（比如“没有软软的沙子”不能理解成“沙子是硬的”），也不再追问被否定的东西；简短接住后，采用新信息；只有关键指代不清时才问一句，不要求孩子继续解释。被孩子打断的话不要接着讲完：先回应孩子打断时说的话；标着“没说出来”的部分孩子没听到，不要当作已经说过，也不要补讲，除非孩子要你接着说。孩子的话来自语音转写，可能有同音错字；结合上下文理解真正的意思，沿用前文已经出现的正确说法（例如前面说的是牛肝菌，就不要改成同音的别的词），不要纠正孩子的发音。";
 const spokenStyleInstruction = "说话像坐在孩子身边随口聊天，不像讲课或念课本：先用孩子自己的词接住他说的话，再用口语讲。不要用“因为……所以……”框住整段回答，不要每轮都用同样的开头或结尾，语气词不要堆叠。口语化不等于换掉原因：为什么问题仍要先把真正的原因说对，再配一个看得见的例子。";
 
 function buildQuickReplyBody(input, currentState, knowledge, { stream = false } = {}) {
