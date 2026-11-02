@@ -19,11 +19,16 @@ test("age rules no longer tell the model it need not ask, but still forbid quizz
 });
 
 test("the quick reply asks for a hook every turn and forbids hollow feelings and drawing invitations", async t => {
-  process.env.QWEN_API_KEY = "test-key"; process.env.QWEN_BASE_URL = "https://example.invalid/compatible-mode/v1";
+  const keys = ["QWEN_API_KEY", "QWEN_BASE_URL", "TUTOR_ENABLE_LLM", "LLM_PROVIDER"];
+  const saved = keys.map(key => process.env[key]);
+  t.after(() => keys.forEach((key, index) => saved[index] === undefined
+    ? delete process.env[key] : process.env[key] = saved[index]));
+  Object.assign(process.env, { QWEN_API_KEY: "test-key", QWEN_BASE_URL: "https://example.invalid/compatible-mode/v1", TUTOR_ENABLE_LLM: "true", LLM_PROVIDER: "qwen" });
   let body;
   t.mock.method(globalThis, "fetch", async (url, options) => { body = JSON.parse(options.body); throw new Error("captured"); });
   const { createQuickTutorReplyWithQwen } = await import("../server/qwenTutor.mjs");
   await createQuickTutorReplyWithQwen("我今天看到一只蜗牛", { profile: { ageBand: "4-5" }, messages: [] }, "好的。");
+  assert.ok(body, "the mocked model request must execute before checking its instructions");
   const system = body.messages[0].content;
   assert.match(system, /容易接的话头/);
   assert.match(system, /不要连续两轮都以问题结尾/);
