@@ -10,26 +10,49 @@
       {
         "id": "voice-loop",
         "label": "语音陪伴主链路",
-        "focus": ["family", "conversation_ui", "voice_pipeline", "local_server", "qwen_speech", "tutor_orchestrator", "qwen_text"],
-        "note": "正式网页仍半双工：只读状态、候选单次接收、后台补全与媒体展示分离。独立voice-lab默认合成测试，显式Qwen模式已验证本机音频、打断与停止，不写家庭档案；漏词与延迟未达标，儿童体验及iPhone锁屏尚未验收。"
+        "focus": [
+          "family",
+          "conversation_ui",
+          "voice_pipeline",
+          "local_server",
+          "qwen_speech",
+          "tutor_orchestrator",
+          "qwen_text",
+          "pilot_log"
+        ],
+        "note": "正式网页仍半双工，但已支持逐句播放与开口打断（监听麦克风不开回声消除，参照播放音量判断）。局域网试点经HTTPS与访问码配对；测量只存本机标签页。独立voice-lab仍为实验。儿童体验、iPhone锁屏与生产部署尚未验收。"
       },
       {
         "id": "visual-response",
         "label": "视觉回应",
-        "focus": ["tutor_orchestrator", "conversation_ui", "whiteboard", "local_server", "qwen_text"],
+        "focus": [
+          "tutor_orchestrator",
+          "conversation_ui",
+          "whiteboard",
+          "local_server",
+          "qwen_text"
+        ],
         "note": "精确对象本地执行；开放图片生成后必须通过视觉模型的低幼安全、要求匹配和编辑保持检查。自动检查不是完整发布验收。"
       },
       {
         "id": "growth-record",
         "label": "成长记录",
-        "focus": ["tutor_orchestrator", "student_memory", "growth_experience", "family"],
+        "focus": [
+          "tutor_orchestrator",
+          "student_memory",
+          "growth_experience",
+          "family"
+        ],
         "note": "本轮上下文独立，旧画面不自动附档；补全核对revision/sessionId。普通写入经applicationPersistence统一结果及失败提示，保留已保存片段身份。替换/恢复沿用专用流程。同步主存储与整包备用快照不变，跨记录事务及历史清理未完成。"
       }
     ]
   },
   "layout": {
     "mode": "grid",
-    "origin": [52, 72],
+    "origin": [
+      52,
+      72
+    ],
     "cols": 5,
     "gapX": 58,
     "gapY": 52,
@@ -57,7 +80,7 @@
       "id": "voice_pipeline",
       "type": "frontend",
       "label": "连续语音控制",
-      "sublabel": "会话控制 · 采集与播报",
+      "sublabel": "逐句播放 · 开口打断",
       "row": 0,
       "col": 2
     },
@@ -65,7 +88,7 @@
       "id": "local_server",
       "type": "backend",
       "label": "本地 API 服务",
-      "sublabel": "白名单 · 请求校验",
+      "sublabel": "白名单 · 局域网配对",
       "row": 0,
       "col": 3
     },
@@ -73,7 +96,7 @@
       "id": "qwen_speech",
       "type": "external",
       "label": "Qwen 语音服务",
-      "sublabel": "实时转写 · 流式合成",
+      "sublabel": "实时转写+上下文 · 流式合成",
       "row": 0,
       "col": 4
     },
@@ -89,7 +112,7 @@
       "id": "qwen_text",
       "type": "external",
       "label": "Qwen 模型服务",
-      "sublabel": "文本 · 图片 · 视觉复核",
+      "sublabel": "短答 3.8-max · 补全 · 图片",
       "row": 1,
       "col": 4
     },
@@ -124,19 +147,38 @@
       "sublabel": "回看 · 整理 · 恢复",
       "row": 3,
       "col": 1
+    },
+    {
+      "id": "pilot_log",
+      "type": "database",
+      "label": "试点测量",
+      "sublabel": "阶段耗时 · 无原文",
+      "row": 0,
+      "col": 1
     }
   ],
   "boundaries": [
     {
       "kind": "region",
       "label": "家庭设备内",
-      "wraps": ["conversation_ui", "voice_pipeline", "whiteboard", "student_memory", "growth_experience"],
+      "wraps": [
+        "conversation_ui",
+        "voice_pipeline",
+        "whiteboard",
+        "student_memory",
+        "growth_experience",
+        "pilot_log"
+      ],
       "pad": 22
     },
     {
       "kind": "region",
       "label": "当前本地开发服务",
-      "wraps": ["local_server", "tutor_orchestrator", "knowledge_runtime"],
+      "wraps": [
+        "local_server",
+        "tutor_orchestrator",
+        "knowledge_runtime"
+      ],
       "pad": 18
     }
   ],
@@ -164,8 +206,11 @@
       "id": "voice_calls_server",
       "from": "voice_pipeline",
       "to": "local_server",
-      "label": "PCM转写 · TTS与回退",
-      "labelAt": [667, 146]
+      "label": "PCM转写 · 逐句TTS",
+      "labelAt": [
+        667,
+        146
+      ]
     },
     {
       "id": "server_calls_speech",
@@ -178,14 +223,20 @@
       "from": "local_server",
       "to": "tutor_orchestrator",
       "label": "Tutor / 绘图路由",
-      "labelAt": [778, 176]
+      "labelAt": [
+        778,
+        176
+      ]
     },
     {
       "id": "orchestrator_calls_text",
       "from": "tutor_orchestrator",
       "to": "qwen_text",
       "label": "对话或绘画计划",
-      "labelAt": [840, 280]
+      "labelAt": [
+        840,
+        280
+      ]
     },
     {
       "id": "knowledge_guides_tutor",
@@ -197,7 +248,7 @@
       "id": "orchestrator_returns_structure",
       "from": "tutor_orchestrator",
       "to": "conversation_ui",
-      "label": "短答 · 受限证据 · 绘图计划",
+      "label": "逐句短答 · 受限证据 · 绘图计划",
       "variant": "emphasis"
     },
     {
@@ -211,14 +262,20 @@
       "from": "conversation_ui",
       "to": "student_memory",
       "label": "本轮原话与关联证据",
-      "labelAt": [334, 280]
+      "labelAt": [
+        334,
+        280
+      ]
     },
     {
       "id": "memory_builds_growth",
       "from": "student_memory",
       "to": "growth_experience",
       "label": "按时间聚合与导出",
-      "labelAt": [334, 414]
+      "labelAt": [
+        334,
+        414
+      ]
     },
     {
       "id": "parent_updates_archive",
@@ -227,6 +284,12 @@
       "fromSide": "right",
       "toSide": "right",
       "label": "整理与恢复"
+    },
+    {
+      "id": "voice_records_timing",
+      "from": "voice_pipeline",
+      "to": "pilot_log",
+      "label": "耗时与失败代码"
     }
   ],
   "cards": [
@@ -234,8 +297,8 @@
       "dot": "orange",
       "title": "当前主链路",
       "items": [
-        "自动续听；明确告别本地结束并停止收音",
-        "短答先播；绘图校验会话和基图后发布",
+        "逐句播放；话没说完先继续听；明确告别本地结束",
+        "开口打断：监听不开回声消除，按播放音量判断",
         "命中敏感规则后本地回应，跳过文本模型",
         "独立LiveKit实验；正式链路仍为半双工"
       ]
@@ -254,9 +317,9 @@
       "dot": "orange",
       "title": "安全边界",
       "items": [
-        "POST同源；文本上下文排除家长码与整库",
+        "POST同源；局域网需HTTPS和访问码配对",
         "有限中文规则；ASR音频先到云端再检测",
-        "无自动通知、敏感档案或历史全面脱敏",
+        "试点测量只含耗时与失败代码，可导出可清空",
         "图片质量与独立安全集、生产部署待验收"
       ]
     }
