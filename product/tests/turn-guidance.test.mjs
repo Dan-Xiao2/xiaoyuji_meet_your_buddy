@@ -37,7 +37,7 @@ test("the same response boundaries reach full, quick and streamed provider reque
     requests.push(JSON.parse(options.body));
     throw new Error("request captured; no provider call");
   });
-  for (const input of ["我现在不想想办法。", "她笑我说话慢。", "为什么会下雨？"]) {
+  for (const input of ["我现在不想想办法。", "她笑我画得丑。", "为什么会下雨？"]) {
     const state = createInitialState();
     state.profile.ageBand = "4-5";
     state.activeSpeaker = { role: "child", name: "虚构孩子" };

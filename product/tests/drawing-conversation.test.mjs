@@ -4,7 +4,7 @@ import { createInitialState } from "../src/data/studentModel.js";
 import { createTutorTurn } from "../src/services/tutorEngine.js";
 import { resolveIllustrationPlan } from "../src/whiteboard/illustrationPlan.js";
 import { normalizeGrowthEvidence } from "../server/qwenTutor.mjs";
-import { drawingRequestInput } from "../src/whiteboard/openDrawing.js";
+import { imageBoard, drawingRequestInput } from "../src/whiteboard/openDrawing.js";
 import { routeOpenDrawing } from "../server/openDrawing.mjs";
 import { renderAdultSummary, renderParentTimeline } from "../src/ui/summary.js";
 import { createSessionSummary } from "../src/session/sessionManager.js";
@@ -85,4 +85,44 @@ test("legacy controls remain in the archive but are excluded from growth reviews
   assert.equal(db.growthMoments[0].childQuote, "不用了，你直接画吧。");
   assert.equal(db.growthMoments[1].reviewEligible, true);
   assert.equal(db.growthMoments[2].reviewEligible, true);
+});
+
+test("talking about drawing is not a canvas request, with or without an existing picture", () => {
+  const house = resolveIllustrationPlan("画一个房子");
+  const inputs = ["她笑我画得丑", "他说我画得不好", "我今天画了一只小兔", "老师让我画一只兔子", "她说我画的兔子耳朵不好看", "我画的房子想要圆窗户", "我不想画了"];
+  for (const state of [createInitialState(), { board: house.board, visualPlan: house }]) {
+    const before = structuredClone(state.board);
+    for (const input of inputs) {
+      assert.equal(resolveIllustrationPlan(input, state), null, input);
+      const local = createTutorTurn(input, { ...createInitialState(), ...state });
+      assert.ok(!local.visualPlan, input);
+      assert.deepEqual(state.board, before, "narration must leave the retained picture untouched");
+    }
+  }
+});
+
+test("drawing narration reaches chat without a drawing provider call, including an image board", async () => {
+  let calls = 0;
+  for (const board of [{ type: "blank" }, resolveIllustrationPlan("画一个房子").board,
+    imageBoard("data:image/jpeg;base64,/9j/AA==", null, "虚构测试图")]) {
+    for (const input of ["她笑我画得丑", "我今天画了一只小兔", "她说我画的兔子耳朵不好看"]) {
+      const route = await routeOpenDrawing({ input, board }, {
+        env: {}, fetchImpl: async () => { calls++; throw new Error("drawing provider must not be called"); }
+      });
+      assert.equal(route.mode, "chat", input);
+    }
+  }
+  assert.equal(calls, 0);
+});
+
+test("explicit drawing and edits survive discussion of an existing drawing", () => {
+  for (const input of ["帮我画一只小兔", "你可以画一个房子吗", "我想把仙人掌画在沙漠里面", "她笑我画得丑，帮我画一只猫", "照着这个再画一个一样的"]) {
+    const plan = resolveIllustrationPlan(input, createInitialState());
+    assert.ok(plan?.changed || plan?.needsPlanner, input);
+  }
+  const house = resolveIllustrationPlan("画一个房子");
+  const state = { board: house.board, visualPlan: house };
+  assert.equal(resolveIllustrationPlan("把这幅画的屋顶改成蓝色", state)?.changed, true);
+  assert.equal(resolveIllustrationPlan("蓝色", state)?.changed, true);
+  assert.equal(resolveIllustrationPlan("把它变大一点", state)?.changed, true);
 });

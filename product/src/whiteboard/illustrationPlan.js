@@ -11,6 +11,22 @@ export const drawingExecutionRule = "普通聊天回复不会执行画布操作�
 const aliases = drawingAliases;
 const numbers = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
 
+const requestPrefix = /^(?:请你?|麻烦你?|小宇|你|能不能|可不可以|可以|能|帮我|给我|替我|我想要?|我要|想|要|先|再|重新)\s*/;
+
+// Drawing mentions are not commands. Keep existing context-based edits/selections
+// without the word “画” on their original path, and allow explicit requests in a later clause.
+export function isDrawingDiscussion(input) {
+  const text = String(input || "");
+  if (!/画|绘制/.test(text)) return false;
+  return !text.split(/[，,。；;！？!?]/).some(clause => {
+    let request = clause.trim();
+    while (requestPrefix.test(request)) request = request.replace(requestPrefix, "");
+    return /^(?:(?:把|给|将|让|在|照着).+?)?(?:画|绘制)(?![得的了过着])/.test(request) ||
+      /^(?:清空|撤销|退回上一步)(?:画纸|画面|这幅画)?(?:吧|一下)?$/.test(request) ||
+      /^(?:把|将|给|让|(?:这|那|整)(?:张|幅)画|画(?:里|上|中)).*(?:改成|换成|涂|变大|变小|放到|移到|删除|删掉|擦掉|清空|加|添)/.test(request);
+  });
+}
+
 export function validIllustrationScene(board) {
   return board?.type === "scene" && (validDrawingScene(board.scene) || validLegacyDrawing(board.scene));
 }
@@ -114,6 +130,7 @@ function houseDetailPlan(text, scene) {
 // Small language adapter; identity, validation and mutations live in drawingScene.js.
 // A model planner can later produce the same operations without changing rendering or storage.
 export function resolveIllustrationPlan(input, state = {}) {
+  if (isDrawingDiscussion(input)) return null;
   const previous = validIllustrationScene(state.board) ? normalizeDrawingScene(state.board.scene) : null;
   if (unsupportedAssetDetail(input)) return { ...result(previous, "这个细节我暂时还不能单独改，先保留原来的画。"), needsPlanner: true };
   const constraints = drawingConstraints(input, previous);

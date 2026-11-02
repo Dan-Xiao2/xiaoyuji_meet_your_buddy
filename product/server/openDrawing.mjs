@@ -1,6 +1,7 @@
 import { checkChildSafety, safeConversationMessages } from "../src/services/safety.js";
 import { drawingCatalogContext } from "../src/whiteboard/drawingCatalog.js";
 import { normalizeDrawingScene } from "../src/whiteboard/drawingScene.js";
+import { isDrawingDiscussion } from "../src/whiteboard/illustrationPlan.js";
 
 const endpoint = "/api/v1/services/aigc/multimodal-generation/generation";
 const safePrompt = text => typeof text === "string" && text.length > 0 && text.length <= 1000 &&
@@ -17,6 +18,7 @@ export function imageConfig(env = process.env) {
 
 export async function routeOpenDrawing({ input, board, context, pendingRequest } = {}, { signal, fetchImpl = fetch, env = process.env } = {}) {
   if (!safePrompt(input)) return { mode: "clarify", reply: "这张图我先不画，我们换个安全的想法吧。" };
+  if (isDrawingDiscussion(input)) return { mode: "chat" };
   if (!env.QWEN_API_KEY || env.TUTOR_ENABLE_LLM === "false") return { mode: "clarify", reply: "这次我还没弄清要怎么画，原来的画先留着。" };
   const timeout = AbortSignal.timeout(7000);
   const scene = normalizeDrawingScene(board?.scene);
