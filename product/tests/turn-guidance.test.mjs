@@ -51,5 +51,6 @@ test("the same response boundaries reach full, quick and streamed provider reque
     assert.match(system, /孩子明确拒绝/);
     assert.match(system, /不编造他人动机/);
     assert.match(system, /优先于留话头/);
+    assert.doesNotMatch(system, /换一个相关的新角度/, "refusal must not also instruct the model to prolong the branch");
   }
 });
