@@ -2,6 +2,8 @@
 
 日期：2026-11-02。范围：规则核查、原创上下文案例、正式服务端流式生成函数的评测采集。未改变运行时回应规则或模型，未调用真实服务。本批不代表回答质量改善。
 
+后续状态：规则冲突的代码修正见[第二批实施记录](2026-11-02-contextual-turn-guidance.md)。下表保留第一批核查时的结果，不能作为修正后的当前行为描述。
+
 ## 已核查的路径与规则
 
 `server/qwenTutor.mjs` 的 resolveQuickGate 先经过安全、本地控制话语、视觉规划及模型启用检查；本地返回可能完全不经过提示词。quick 和 stream 共用 buildQuickReplyBody：口语风格、纠正/跟随、留话头、可关闭的 turnGuidance、知识上下文，最后附共享 responseBoundaryInstruction。完整 Tutor 使用共享边界，但不使用同一份 quick 提示。模型读取最近12条安全历史；本轮分类 classifyChildTurn 只读取当前输入。turnGuidance 读取上一条 tutor 的问号来限制连续提问。
