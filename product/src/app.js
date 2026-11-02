@@ -1060,9 +1060,9 @@ function speakLatestTutorReply(replyMessageId = null) {
   });
 }
 
-function recordVoiceTiming({ stage, latencyMs, serverLatencyMs = 0, reason, audioSeconds } = {}) {
+function recordVoiceTiming({ stage, latencyMs, serverLatencyMs = 0, reason, audioSeconds, levels } = {}) {
   if (!stage || !Number.isFinite(Number(latencyMs))) return;
-  pilotLog.record({ stage, latencyMs, serverLatencyMs, reason, audioSeconds });
+  pilotLog.record({ stage, latencyMs, serverLatencyMs, reason, audioSeconds, levels });
   recentVoiceTimings.push({ stage, latencyMs: Math.round(Number(latencyMs)), serverLatencyMs: Math.round(Number(serverLatencyMs || 0)), at: new Date().toISOString() });
   if (recentVoiceTimings.length > 80) recentVoiceTimings.shift();
   // Timing only: no transcript, identity, credentials or audio is retained.

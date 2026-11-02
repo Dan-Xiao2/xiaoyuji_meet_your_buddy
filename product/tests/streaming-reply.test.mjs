@@ -77,3 +77,15 @@ test("ending, cancelling and replacing a streamed reply", () => {
   rejected.cancel();
   assert.equal(cancelled.session.getSnapshot().output, "idle");
 });
+
+test("tapping to talk while a reply plays marks that reply as not heard to the end", () => {
+  const h = harness();
+  const reply = h.session.playStreamingReply();
+  reply.push("蜗牛背着小房子。");
+  h.sinks[0].callbacks.onStart();
+  reply.attach("turn-2:tutor");
+  h.session.beginInput();
+  assert.deepEqual(h.interrupted, ["turn-2:tutor"]);
+  h.session.beginInput();
+  assert.deepEqual(h.interrupted, ["turn-2:tutor"], "a tap while nothing plays marks nothing");
+});

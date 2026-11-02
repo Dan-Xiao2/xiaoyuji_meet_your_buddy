@@ -38,6 +38,11 @@ test('recognition connecting while the child starts speaking belongs to the new 
   const streamed = createPilotLog();
   for (const stage of ['endpoint', 'asr-realtime-final', 'tts-first-audio', 'response-start', 'quick-reply', 'asr-realtime-connect', 'endpoint']) streamed.record({ stage, latencyMs: 1 });
   assert.deepEqual(streamed.entries().map(entry => entry.turn), [1, 1, 1, 1, 1, 2, 2], 'a whole-reply time after speech started stays in its turn');
+  const watched = createPilotLog();
+  watched.record({ stage: 'response-start', latencyMs: 1 });
+  watched.record({ stage: 'barge-in-watch', latencyMs: 4000, reason: 'stopped', levels: { micPeak: 0.0412, outPeak: 0.2, coupling: 0.6, thresholdMin: 0.012, bestMargin: 0.83, echoCancellation: 0, text: 'x', audio: [1] } });
+  assert.deepEqual(watched.entries().map(entry => entry.turn), [1, 1], 'the barge-in summary stays in its turn');
+  assert.deepEqual(watched.entries()[1].levels, { micPeak: 0.041, outPeak: 0.2, coupling: 0.6, thresholdMin: 0.012, bestMargin: 0.83, echoCancellation: 0 }, 'only the fixed numeric levels are kept');
   const silent = createPilotLog();
   for (const stage of ['endpoint', 'quick-reply', 'endpoint', 'quick-reply']) silent.record({ stage, latencyMs: 1 });
   assert.deepEqual(silent.entries().map(entry => entry.turn), [1, 1, 2, 2], 'without playback, a second end-point opens a turn');

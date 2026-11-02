@@ -53,6 +53,30 @@ test("with a playback reference, a child speaking over Xiaoyu or in a pause trig
   assert.equal(feedWithPlayback(gap, [...warm, ...pause, ...quietChild]).some(item => item.triggered), true);
 });
 
+// Levels measured on an iPhone with the raw microphone (pilot, 2026-11-02): Xiaoyu's output 0.1–0.35,
+// about 2 % of it leaking in, a quiet room near 0.0015, the child at roughly 0.008–0.012 RMS.
+function pilotScene({ childFrom = null, childLevel = 0.006, clatterAt = null } = {}) {
+  return Array.from({ length: 500 }, (_, i) => {
+    const out = 0.1 + 0.25 * Math.abs(Math.sin(i / 6));
+    let mic = 0.0015 + 0.0005 * Math.abs(Math.sin(i * 1.7)) + 0.02 * out;
+    if (childFrom !== null && i >= childFrom) mic += childLevel * (0.75 + 0.25 * Math.abs(Math.sin(i / 3))); // syllables (≈0.006 → mic peak 0.014, as measured)
+    if (clatterAt !== null && i >= clatterAt && i < clatterAt + 5) mic += 0.03; // a cup put down, 100 ms
+    return [mic, out];
+  });
+}
+const rawPilot = () => createBargeInDetector({ absolute: 0.004, gapMs: 150 });
+
+test("pilot levels: the raw-microphone settings hear the child, and the old floor did not", () => {
+  assert.equal(feedWithPlayback(rawPilot(), pilotScene({ childFrom: 200 })).some(item => item.triggered), true);
+  assert.equal(feedWithPlayback(createBargeInDetector({ absolute: 0.012 }), pilotScene({ childFrom: 200 })).some(item => item.triggered), false,
+    "with the old 0.012 floor the child at pilot levels never interrupts, as seen on the iPhone");
+});
+
+test("pilot levels: Xiaoyu alone or a short clatter does not interrupt", () => {
+  assert.equal(feedWithPlayback(rawPilot(), pilotScene()).some(item => item.triggered), false);
+  assert.equal(feedWithPlayback(rawPilot(), pilotScene({ clatterAt: 250 })).some(item => item.triggered), false);
+});
+
 function fakeAudio(levels) {
   const contexts = [];
   class AudioContextClass {
@@ -95,6 +119,25 @@ test("a shared page context is used but never closed, so playback keeps working"
   assert.equal(stream.track.stopped, true);
 });
 
+test("monitor reports how detection went exactly once: stopped, triggered or failed to open", async () => {
+  const reports = [];
+  const quiet = fakeAudio([]);
+  const stopped = startBargeInMonitor({ openStream: async () => quiet.stream(), AudioContextClass: quiet.AudioContextClass,
+    onTrigger() {}, onEnd: (stats, reason) => reports.push(reason), now: () => 0, requestFrame: () => 1, cancelFrame() {} });
+  await stopped.ready; stopped.stop(); stopped.stop();
+  const failing = startBargeInMonitor({ openStream: async () => { throw new Error("denied"); }, AudioContextClass: quiet.AudioContextClass,
+    onTrigger() {}, onEnd: (stats, reason) => reports.push(reason) });
+  await failing.ready; failing.stop();
+  let clock = 0;
+  const loud = fakeAudio([...Array(30).fill(0.01), ...Array(30).fill(0.3)]);
+  const triggered = startBargeInMonitor({ openStream: async () => loud.stream(), AudioContextClass: loud.AudioContextClass,
+    onTrigger() {}, onEnd: (stats, reason) => reports.push(`${reason}:${stats.bestMargin >= 1}`), now: () => (clock += 20), requestFrame: fn => { queueMicrotask(fn); return 1; }, cancelFrame() {} });
+  await triggered.ready;
+  for (let i = 0; i < 80 && reports.length < 3; i++) await new Promise(resolve => setImmediate(resolve));
+  triggered.stop();
+  assert.deepEqual(reports, ["stopped", "open-failed", "triggered:true"]);
+});
+
 test("monitor stopped before the microphone opens releases the late stream and never runs", async () => {
   const audio = fakeAudio([]), late = audio.stream();
   let release;
@@ -113,7 +156,7 @@ function session({ bargeIn = true } = {}) {
     recordingSupported: true, preparePlayback() {}, stopListening() {}, stopSpeaking() {}, finishListening() {},
     listen(callbacks) { captures.push(callbacks); },
     speak(text, callbacks) { speeches.push(callbacks); return true; }, prefetchSpeech() {},
-    watchForBargeIn(onBargeIn) { const watch = { onBargeIn, stopped: false, stop() { this.stopped = true; } }; watches.push(watch); return watch; }
+    watchForBargeIn(onBargeIn, options = {}) { const watch = { onBargeIn, options, stopped: false, stop() { this.stopped = true; } }; watches.push(watch); return watch; }
   };
   let now = 1000;
   const voiceSession = createVoiceSession({ voice, getContext: () => context, onInput() {}, onTiming: item => timings.push(item), onLevel() {},
@@ -137,6 +180,9 @@ test("speaking over a playing reply stops it, listens, and records when it happe
   h.captures[0].onEnd("");
   assert.ok(h.timings.some(item => item.stage === "barge-in-empty"), "an interruption that hears nothing is counted");
   assert.ok(h.timings.some(item => item.stage === "capture-empty"), "hearing nothing is counted for the pilot");
+  h.watches[0].options.onEnd({ micPeak: 0.05, bestMargin: 1.2 }, "triggered");
+  assert.ok(h.timings.some(item => item.stage === "barge-in-watch" && item.reason === "triggered" && item.levels.micPeak === 0.05),
+    "how detection went is reported, as numbers only");
 });
 
 test("no barge-in watch when disabled or for a farewell; any stop of playback ends the watch", () => {
@@ -155,4 +201,19 @@ test("no barge-in watch when disabled or for a farewell; any stop of playback en
   h.voiceSession.playReply({ text: "第二句。" }); h.speeches[1].onStart(); h.speeches[1].onEnd();
   assert.equal(h.watches[1].stopped, true, "playback finishing ends the watch");
   assert.ok(!h.timings.some(item => item.stage === "barge-in-empty"), "a normal capture is not counted as an interruption");
+});
+
+test("with retracking the coupling follows the echo canceller down, never up", () => {
+  const settings = { warmupMs: 500, absolute: 0.001, ratio: 2, retrackMs: 1000 };
+  const run = (detector, from, to, mic) => { for (let now = from; now < to; now += 16) detector.update(mic, now, 0.2); };
+  const converging = createBargeInDetector(settings);
+  run(converging, 0, 520, 0.008); // warm-up: the canceller has not converged yet, 4 % leaks through
+  assert.equal(converging.stats().coupling, 0.04);
+  run(converging, 520, 3000, 0.002); // converged: 1 %
+  assert.equal(converging.stats().coupling, 0.01);
+  // A louder stretch that is not the child (1.5 %, under the 2 × 1 % threshold) does not raise it.
+  const steady = createBargeInDetector(settings);
+  run(steady, 0, 520, 0.002);
+  run(steady, 520, 3000, 0.003);
+  assert.equal(steady.stats().coupling, 0.01);
 });

@@ -3,6 +3,8 @@
 // Only allow-listed fields are stored. Never text, audio, names, or anything a child said.
 const STORAGE_KEY = "xiaoyuji-pilot-log-v1";
 const CODE = /^[a-z0-9-]{1,40}$/;
+const SAME_TURN = new Set(["quick-reply", "barge-in-watch"]);
+const LEVEL_KEYS = ["micPeak", "outPeak", "coupling", "thresholdMin", "bestMargin", "echoCancellation", "echoReduction", "echoDelayMs"];
 // Fallbacks, and the "did not hear the child" cases: capture errors, no speech, nothing recognised,
 // and interruptions that heard nothing (likely false triggers).
 const FAILURE_STAGES = new Set(["asr-realtime-fallback", "tts-stream-fallback", "tts-cloud-failed", "tts-cloud-mp3",
@@ -46,18 +48,24 @@ export function createPilotLog({ storage = null, now = () => Date.now(), maxEntr
   const inTurn = stage => entries.some(entry => entry.turn === turn && entry.stage === stage);
   const save = () => { try { storage?.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch { /* storage full or blocked: keep in memory */ } };
   return {
-    record({ stage, latencyMs, serverLatencyMs, reason, audioSeconds } = {}) {
+    record({ stage, latencyMs, serverLatencyMs, reason, audioSeconds, levels } = {}) {
       if (!CODE.test(stage) || !Number.isFinite(Number(latencyMs))) return;
       // Recognition connects when the child STARTS speaking, before the end-point, so a turn cannot
       // begin at the end-point. A new turn opens once the previous reply has started playing, or
       // at a second end-point within one turn (a reply that never played, e.g. speech disabled).
       // With sentence-by-sentence replies the whole-reply time ("quick-reply") arrives after speech
-      // has started; it still belongs to this turn.
-      if (turn === 0 || (inTurn("response-start") && stage !== "quick-reply") || (stage === "endpoint" && inTurn("endpoint"))) turn++;
+      // has started, and the barge-in summary when it ends; both still belong to this turn.
+      if (turn === 0 || (inTurn("response-start") && !SAME_TURN.has(stage)) || (stage === "endpoint" && inTurn("endpoint"))) turn++;
       const entry = { turn, stage, latencyMs: Math.round(Number(latencyMs)), at: now() };
       if (Number(serverLatencyMs) > 0) entry.serverLatencyMs = Math.round(Number(serverLatencyMs));
       if (CODE.test(reason)) entry.reason = reason;
       if (Number.isFinite(audioSeconds)) entry.audioSeconds = Math.round(audioSeconds * 10) / 10;
+      // Barge-in detection levels: a fixed set of numbers, never audio.
+      if (levels && typeof levels === "object") {
+        const kept = {};
+        for (const key of LEVEL_KEYS) if (Number.isFinite(levels[key])) kept[key] = Math.round(levels[key] * 1000) / 1000;
+        if (Object.keys(kept).length) entry.levels = kept;
+      }
       entries.push(entry);
       if (entries.length > maxEntries) entries.shift();
       save();

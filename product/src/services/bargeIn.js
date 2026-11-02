@@ -8,9 +8,18 @@
 // output peak, sustained for `minSpeechMs`, counts as the child speaking. Without a playback level
 // it falls back to the loudest leak heard during warm-up. Interruptions that end with nothing
 // recognised ("barge-in-empty") are recorded to measure false triggers.
-export function createBargeInDetector({ warmupMs = 500, minSpeechMs = 300, absolute = 0.035, ratio = 1.6, gapMs = 80, decayMs = 200 } = {}) {
-  let startedAt = null, leak = 0, coupling = 0, peak = 0, lastAt = null;
+// retrackMs: with echo cancellation the leak keeps shrinking after warm-up while the filter
+// converges, so every retrackMs the coupling is re-measured and lowered (never raised: the child
+// speaking only raises the ratio).
+// stats() reports how the detection went, as numbers only, so a pilot session can show whether a
+// missed interruption was a sensitivity problem or Xiaoyu's leak drowning the child's voice.
+export function createBargeInDetector({ warmupMs = 500, minSpeechMs = 300, absolute = 0.035, ratio = 1.6, gapMs = 80, decayMs = 200, couplingPercentile = 0.75, retrackMs = 0 } = {}) {
+  let startedAt = null, leak = 0, coupling = null, peak = 0, lastAt = null;
   let voiceSince = null, lastVoiceAt = null, triggered = false;
+  const ratios = [];
+  let windowStart = null, windowRatios = [];
+  const percentile = values => { const sorted = values.sort((a, b) => a - b); return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * couplingPercentile))]; };
+  const stats = { micPeak: 0, outPeak: 0, coupling: 0, thresholdMin: null, bestMargin: 0 };
   return {
     update(level, now, playback = 0) {
       if (triggered) return { triggered: false };
@@ -19,12 +28,30 @@ export function createBargeInDetector({ warmupMs = 500, minSpeechMs = 300, absol
       // The output peak decays slowly, covering the delay and room echo between speaker and microphone.
       peak = Math.max(Number(playback) || 0, lastAt === null ? 0 : peak * Math.exp(-(now - lastAt) / decayMs));
       lastAt = now;
+      stats.outPeak = Math.max(stats.outPeak, peak);
       if (now - startedAt < warmupMs) {
         leak = Math.max(leak, value);
-        if (peak >= 0.01) coupling = Math.max(coupling, value / peak);
+        if (peak >= 0.01) ratios.push(value / peak);
         return { warming: true };
       }
+      // A typical (not the largest) warm-up ratio: one spike would otherwise set the bar too high.
+      if (coupling === null) {
+        coupling = ratios.length ? percentile(ratios) : 0;
+        stats.coupling = coupling;
+        windowStart = now;
+      }
+      if (retrackMs && coupling) {
+        if (peak >= 0.01) windowRatios.push(value / peak);
+        if (now - windowStart >= retrackMs) {
+          if (windowRatios.length >= 10) coupling = Math.min(coupling, percentile(windowRatios));
+          stats.coupling = coupling;
+          windowStart = now; windowRatios = [];
+        }
+      }
       const threshold = Math.max(absolute, coupling ? coupling * peak * ratio : leak * ratio);
+      stats.micPeak = Math.max(stats.micPeak, value);
+      stats.thresholdMin = stats.thresholdMin === null ? threshold : Math.min(stats.thresholdMin, threshold);
+      stats.bestMargin = Math.max(stats.bestMargin, value / threshold);
       if (value >= threshold) {
         if (voiceSince === null) voiceSince = now;
         lastVoiceAt = now;
@@ -33,7 +60,8 @@ export function createBargeInDetector({ warmupMs = 500, minSpeechMs = 300, absol
       }
       if (voiceSince !== null && now - voiceSince >= minSpeechMs) { triggered = true; return { triggered: true, threshold }; }
       return { listening: true, threshold };
-    }
+    },
+    stats: () => ({ ...stats, thresholdMin: stats.thresholdMin ?? 0 })
   };
 }
 
@@ -43,13 +71,23 @@ export function createBargeInDetector({ warmupMs = 500, minSpeechMs = 300, absol
 // next words are not lost to reopening the microphone); otherwise stop() releases it.
 // context: the page's shared AudioContext, left open on release; otherwise a private one is used.
 // playbackLevel: () => current output level (0–1), or nothing when it cannot be measured.
-export function startBargeInMonitor({ openStream, AudioContextClass, context: shared = null, playbackLevel = () => 0, onTrigger, detector = createBargeInDetector(),
-  now = () => performance.now(), requestFrame = callback => window.requestAnimationFrame(callback), cancelFrame = id => window.cancelAnimationFrame(id) }) {
-  let stopped = false, frame = null, context = null, stream = null, source = null;
+// meter(context, source): resolves to { level(), playback?(), stats?(), dispose() }; the default
+// measures the microphone with an analyser. The echo-cancelling meter reports what is left after
+// Xiaoyu's leak is removed, and the playback level aligned with it.
+// onEnd(stats, reason): called once when monitoring ends — reason "triggered", "stopped" or "open-failed".
+export function startBargeInMonitor({ openStream, AudioContextClass, context: shared = null, playbackLevel = () => 0, onTrigger, onEnd = () => {}, detector = createBargeInDetector(),
+  meter: createMeter = analyserMeter, now = () => performance.now(), requestFrame = callback => window.requestAnimationFrame(callback), cancelFrame = id => window.cancelAnimationFrame(id) }) {
+  let stopped = false, frame = null, context = null, stream = null, source = null, meter = null, reported = false;
+  const report = reason => {
+    if (reported) return;
+    reported = true;
+    try { onEnd({ ...(detector.stats?.() || {}), ...(meter?.stats?.() || {}) }, reason); } catch { /* diagnostics only */ }
+  };
   const release = ({ keepStream = false } = {}) => {
     stopped = true;
     if (frame !== null) cancelFrame(frame);
     frame = null;
+    try { meter?.dispose(); } catch { /* already gone */ }
     source?.disconnect(); source = null;
     if (context && !shared && context.state !== "closed") context.close().catch(() => {});
     context = null;
@@ -58,25 +96,23 @@ export function startBargeInMonitor({ openStream, AudioContextClass, context: sh
   };
   const ready = (async () => {
     try {
-      const opened = await openStream();
-      if (stopped) { opened.getTracks().forEach(track => track.stop()); return; }
-      stream = opened;
+      const microphone = await openStream();
+      if (stopped) { microphone.getTracks().forEach(track => track.stop()); return; }
+      stream = microphone;
       context = shared || new AudioContextClass();
       if (context.state === "suspended") await context.resume().catch(() => {});
       if (stopped) return;
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 1024;
       source = context.createMediaStreamSource(stream);
-      source.connect(analyser);
-      const samples = new Float32Array(analyser.fftSize);
+      const opened = await createMeter(context, source);
+      if (stopped) { try { opened.dispose(); } catch { /* already gone */ } return; }
+      meter = opened;
       const tick = () => {
         if (stopped) return;
-        analyser.getFloatTimeDomainData(samples);
-        let sum = 0;
-        for (const sample of samples) sum += sample * sample;
-        if (detector.update(Math.sqrt(sum / samples.length), now(), playbackLevel()).triggered) {
+        const playback = meter.playback ? meter.playback() : playbackLevel();
+        if (detector.update(meter.level(), now(), playback).triggered) {
           const handed = stream;
           release({ keepStream: true });
+          report("triggered");
           onTrigger(handed);
           return;
         }
@@ -85,8 +121,25 @@ export function startBargeInMonitor({ openStream, AudioContextClass, context: sh
       tick();
     } catch {
       // Without a microphone the reply simply plays to the end, as before.
+      report("open-failed");
       if (!stopped) release();
     }
   })();
-  return { stop: () => { if (!stopped) release(); }, ready };
+  return { stop: () => { if (!stopped) { release(); report("stopped"); } }, ready };
+}
+
+function analyserMeter(context, source) {
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 1024;
+  source.connect(analyser);
+  const samples = new Float32Array(analyser.fftSize);
+  return {
+    level() {
+      analyser.getFloatTimeDomainData(samples);
+      let sum = 0;
+      for (const sample of samples) sum += sample * sample;
+      return Math.sqrt(sum / samples.length);
+    },
+    dispose() { analyser.disconnect?.(); }
+  };
 }

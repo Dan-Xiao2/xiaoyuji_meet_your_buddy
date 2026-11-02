@@ -3,7 +3,7 @@ import { createPcmPlayer } from "./pcmPlayer.js";
 import { cropRecordedAudio } from "./recordedAudio.js";
 import { createRealtimeCapture } from "./realtimeAsr.js";
 import { getMicrophoneId, openMicrophone, microphoneError } from "./microphoneInput.js";
-import { startBargeInMonitor } from "./bargeIn.js";
+import { createBargeInDetector, startBargeInMonitor } from "./bargeIn.js";
 
 export function createVoiceController() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -56,22 +56,67 @@ export function createVoiceController() {
 
   // While a reply plays, listen for the child starting to speak. onBargeIn is called once; the
   // open stream is kept briefly for the capture that follows (unused, it is released after 2 s).
-  // With streamed playback the output level is measurable, so the microphone opens without echo
-  // cancellation (no call audio on iPhone) and the detector compares it with what is playing. The
-  // whole-file fallback plays outside the page's audio graph, so it keeps echo cancellation.
+  // With streamed playback the microphone opens without the system's echo cancellation (on an
+  // iPhone it switches to call audio: electric noise) and goes through the page's own echo
+  // canceller, which removes Xiaoyu's leak using what is playing; the detector listens to what is
+  // left. The whole-file fallback plays outside the page's audio graph, so it keeps the system's.
   // A raw stream is not handed to the following capture: without gain control a quiet child could
   // be missed, so listening reopens the microphone with normal processing.
-  function watchForBargeIn(onBargeIn) {
+  // onEnd(stats, reason) reports how detection went (numbers only), for the family pilot.
+  function watchForBargeIn(onBargeIn, { onEnd = () => {} } = {}) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!recordingSupported || !secureEnough || !AudioContextClass) return { stop() {} };
     const referenced = Boolean(pcmPlayer && outputAnalyser);
-    return startBargeInMonitor({ openStream: () => openMicrophone({ voiceProcessing: !referenced }), AudioContextClass,
+    // Without the canceller, level alone could not tell the child (~0.006–0.01 RMS on an iPhone)
+    // from Xiaoyu's leak plus room echo (~0.004–0.006): it missed the child or stopped Xiaoyu by
+    // itself (pilot, 2026-11-02). So without AudioWorklet the streamed path only allows tapping.
+    if (referenced && !(sharedAudioContext()?.audioWorklet && window.AudioWorkletNode)) return { stop() {} };
+    // Settings from a simulation with real speech, room echo and speaker distortion: the coupling
+    // is re-measured every second as the canceller converges, at the 90th percentile and twice
+    // over, which kept Xiaoyu from interrupting herself while still catching the child in ~0.3 s.
+    const detector = createBargeInDetector(referenced ? { absolute: 0.004, gapMs: 150, ratio: 2, couplingPercentile: 0.9, retrackMs: 1000 } : { absolute: 0.035 });
+    return startBargeInMonitor({ openStream: () => openMicrophone({ voiceProcessing: !referenced }), AudioContextClass, detector,
+      onEnd: (stats, reason) => onEnd({ ...stats, echoCancellation: referenced ? 0 : 1 }, reason),
+      ...(referenced ? { meter: echoCancellingMeter } : {}),
       context: sharedAudioContext(), playbackLevel: referenced ? playbackLevel : () => 0, onTrigger: (opened) => {
         dropHandoff();
         if (referenced) opened.getTracks().forEach((track) => track.stop());
         else { handoffStream = opened; handoffTimer = window.setTimeout(dropHandoff, 2000); }
         onBargeIn();
       } });
+  }
+
+  // The raw microphone and the output bus go into the echo canceller worklet, which reports levels
+  // every 16 ms. What it learnt about the echo path is kept for the next reply.
+  let echoModule = null, echoMemory = null;
+  async function echoCancellingMeter(context, source) {
+    if (!echoModule || echoModule.context !== context) {
+      echoModule = { context, ready: context.audioWorklet.addModule(new URL("./echoCancellerWorklet.js", import.meta.url)) };
+      echoModule.ready.catch(() => { echoModule = null; });
+    }
+    await echoModule.ready;
+    const node = new window.AudioWorkletNode(context, "echo-canceller", { numberOfInputs: 2, numberOfOutputs: 0,
+      channelCount: 1, channelCountMode: "explicit", processorOptions: echoMemory || {} });
+    const latest = { residual: 0, reference: 0, delayMs: 0 }, totals = { mic: 0, residual: 0 };
+    node.port.onmessage = ({ data }) => {
+      if (data?.type === "state") { echoMemory = { weights: data.weights, delay: data.delay, offset: data.offset }; node.port.close(); return; }
+      if (data?.type !== "level") return;
+      latest.residual = data.residual; latest.reference = data.reference; latest.delayMs = data.delayMs;
+      if (data.reference > 0.001) { totals.mic += data.mic * data.mic; totals.residual += data.residual * data.residual; }
+    };
+    const reference = outputBus;
+    source.connect(node, 0, 0);
+    reference?.connect(node, 0, 1);
+    return {
+      level: () => latest.residual,
+      playback: () => latest.reference,
+      stats: () => ({ echoReduction: totals.residual > 0 ? 10 * Math.log10(totals.mic / totals.residual) : 0, echoDelayMs: latest.delayMs }),
+      dispose() {
+        try { source.disconnect(node); } catch { /* already disconnected */ }
+        try { reference?.disconnect(node); } catch { /* already disconnected */ }
+        node.port.postMessage("stop");
+      }
+    };
   }
 
   // Output bus on the shared context: streamed speech goes through it so its level can be read.

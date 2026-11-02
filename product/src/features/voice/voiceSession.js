@@ -106,6 +106,8 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     failure = null; readyDetail = "";
     ui.beforeListen();
     if (!automated) { voice.preparePlayback(); autoListen = true; }
+    // Tapping to talk while Xiaoyu speaks also cuts the reply short; the next turn must know.
+    if (!automated && !afterBargeIn && output === "playing" && replyMessageId) onBargeIn(replyMessageId);
     clearTimer();
     stopOutput();
     // afterBargeIn: a capture that follows a barge-in and hears nothing suggests a false trigger.
@@ -290,7 +292,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
               // Read at trigger time: a streamed reply is attached to its message only once committed.
               if (replyMessageId) onBargeIn(replyMessageId);
               beginInput({ afterBargeIn: true });
-            });
+            }, { onEnd: (stats, reason) => onTiming({ stage: "barge-in-watch", latencyMs: clock.now() - playStartedAt, reason, levels: stats }) });
           }
           if (steps && previousEnd !== null) {
             onTiming({ stage: "drawing-segment-gap", latencyMs: clock.now() - previousEnd });

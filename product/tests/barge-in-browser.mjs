@@ -1,5 +1,7 @@
-// Barge-in in the real page: speaking while Xiaoyu's reply plays stops it and starts listening;
-// with the switch off, the same speech does not interrupt and no microphone is opened.
+// Barge-in in the real page: speaking while Xiaoyu's reply plays stops it and starts listening,
+// through the page's echo canceller (a real AudioWorklet); silence does not interrupt. With the
+// switch off, speech does not interrupt and no microphone is opened, but a tap still does.
+// How well echo is removed is tested in echo-canceller.test.mjs with simulated room echo.
 // The microphone is a synthetic Web Audio tone; no physical microphone or external API is used.
 import assert from "node:assert/strict";
 import { createInitialState } from "../src/data/studentModel.js";
@@ -70,16 +72,18 @@ try {
 
   await ask("虚构：蜗牛为什么慢");
   await page.waitForFunction(() => document.querySelector(".child-voice-dock").dataset.voicePhase === "speaking");
-  await page.waitForTimeout(700); // past the echo warm-up
-  assert.equal(await phase(), "speaking");
+  await page.waitForTimeout(1200); // a quiet room past the warm-up does not interrupt
+  assert.equal(await phase(), "speaking", "silence does not interrupt Xiaoyu");
   const listeningBefore = await page.evaluate(() => window.recognitionStarts);
   await page.evaluate(() => { window.micSpeaking = true; });
   await page.waitForFunction(count => window.recognitionStarts > count && document.querySelector(".child-voice-dock").dataset.voicePhase !== "speaking", listeningBefore, { timeout: 3000 });
   await page.evaluate(() => { window.micSpeaking = false; });
   const pilot = await page.evaluate(() => JSON.parse(sessionStorage.getItem("xiaoyuji-pilot-log-v1") || "[]"));
   assert.ok(pilot.some(entry => entry.stage === "barge-in" && entry.latencyMs >= 500), "the interruption is measured");
-  // While Xiaoyu streams speech the barge-in microphone has no echo cancellation (no call audio on
-  // iPhone); listening afterwards uses normal processing again.
+  const watch = pilot.find(entry => entry.stage === "barge-in-watch" && entry.levels);
+  assert.ok(watch && watch.levels.echoCancellation === 0 && Number.isFinite(watch.levels.echoDelayMs), "the page's own echo canceller ran");
+  // While Xiaoyu streams speech the barge-in microphone has no system echo cancellation (no call
+  // audio on iPhone); listening afterwards uses normal processing again.
   const constraints = await page.evaluate(() => window.micConstraints);
   const monitor = constraints.findLastIndex(audio => audio?.echoCancellation === false);
   assert.ok(monitor >= 0, "the barge-in microphone avoids call audio");
@@ -92,16 +96,24 @@ try {
   assert.equal(await page.evaluate(() => localStorage.getItem("xiaoyuji-barge-in-v1")), "off");
   await ask("虚构：蜗牛住在哪里", { tap: false }); // already listening after the interruption
   await page.waitForFunction(() => document.querySelector(".child-voice-dock").dataset.voicePhase === "speaking");
+  let history = quickRequests.at(-1).state.messages.filter(message => message.role === "tutor");
+  assert.equal(history.at(-1).interrupted, true, "a reply the child spoke over is marked in the next request");
   const opens = await page.evaluate(() => window.micOpens);
   await page.evaluate(() => { window.micSpeaking = true; });
   await page.waitForTimeout(1500);
+  await page.evaluate(() => { window.micSpeaking = false; });
   assert.equal(await phase(), "speaking", "with the switch off the reply keeps playing");
   assert.equal(await page.evaluate(() => window.micOpens), opens, "no microphone is opened while it is off");
-  // The reply the child spoke over is marked in the next request, so the model knows it was not heard to the end.
-  const history = quickRequests.at(-1).state.messages.filter(message => message.role === "tutor");
-  assert.equal(history.at(-1).interrupted, true, "the interrupted reply is marked in the next request");
+  // Tapping still interrupts, and that reply is marked too.
+  const tapBefore = await page.evaluate(() => window.recognitionStarts);
+  await page.locator("#mainVoiceButton").click();
+  await page.waitForFunction(count => window.recognitionStarts > count && document.querySelector(".child-voice-dock").dataset.voicePhase !== "speaking", tapBefore, { timeout: 3000 });
+  await ask("虚构：蜗牛吃什么", { tap: false });
+  await page.waitForFunction(() => document.querySelector(".child-voice-dock").dataset.voicePhase === "speaking");
+  history = quickRequests.at(-1).state.messages.filter(message => message.role === "tutor");
+  assert.equal(history.at(-1).interrupted, true, "a reply cut short by a tap is marked in the next request");
   assert.deepEqual(errors, []);
-  console.log("PASS barge-in: speaking over a reply stops it and listens; switched off it does neither");
+  console.log("PASS barge-in: speech over a reply stops it through the echo canceller, silence does not; switched off only a tap does");
   await context.close();
 } finally {
   await browser.close();
