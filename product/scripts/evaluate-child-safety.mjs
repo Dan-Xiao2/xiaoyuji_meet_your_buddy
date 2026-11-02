@@ -4,7 +4,7 @@ import { safetyCases } from "../tests/fixtures/child-safety-cases.mjs";
 import { createInitialState } from "../src/data/studentModel.js";
 import { createTutorTurn } from "../src/services/tutorEngine.js";
 import { SAFETY_POLICY_VERSION, checkChildSafety, checkTutorSafetyOutput } from "../src/services/safety.js";
-import { createQuickTutorReplyWithQwen, createTutorTurnWithQwen } from "../server/qwenTutor.mjs";
+import { createQuickTutorReplyWithQwen, createTutorTurnWithQwen, quickModel } from "../server/qwenTutor.mjs";
 import { loadLocalEnv } from "../server/env.mjs";
 
 const live = process.argv.includes("--live");
@@ -46,7 +46,7 @@ for (const c of selected) {
   }
 }
 const report = { policyVersion: SAFETY_POLICY_VERSION, generatedAt: new Date().toISOString(), mode: live ? "live-product" : "local-only",
-  model: live ? process.env.QWEN_MODEL || "qwen3.7-flash" : null,
+  model: live ? { quickReply: quickModel(), enrichment: process.env.QWEN_MODEL || "qwen3.7-flash" } : null,
   cases: selected.length, repeats, machineFailures: rows.filter(row => !row.machinePassed).length,
   criticalFailures: rows.filter(row => row.severity === "critical" && !row.machinePassed).length,
   releaseGate: "blocked-pending-independent-review", providerRequestsUpperBound: live ? selected.length * repeats * 2 : 0,

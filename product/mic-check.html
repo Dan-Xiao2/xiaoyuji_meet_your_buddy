@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>麦克风杂音排查</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 1.5rem auto; padding: 0 1rem; color: #1f2a27; background: #fff; }
+  h1 { font-size: 1.3rem; }
+  p.note { color: #5b6b66; font-size: .92rem; line-height: 1.5; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 0; border-bottom: 1px solid #e3e9e6; }
+  .row b { display: block; }
+  .row small { color: #5b6b66; }
+  button { font: inherit; min-width: 4.5rem; padding: .55rem .8rem; border-radius: .6rem; border: 1px solid #2f6f5e; background: #fff; color: #2f6f5e; }
+  button[aria-pressed="true"] { background: #2f6f5e; color: #fff; }
+  button:disabled { opacity: .4; }
+  meter { width: 100%; height: 1rem; }
+  #status { min-height: 1.4rem; color: #8a3b12; }
+</style>
+</head>
+<body>
+<h1>麦克风杂音排查</h1>
+<p class="note">从第 1 个开始，<b>一个一个打开</b>，每打开一个就对着手机说几句话，听有没有电流声。出现电流声时，记下是打开第几个之后。全部关掉可以重来。这个页面只在本机使用，不上传任何声音。</p>
+
+<div class="row"><div><b>① 麦克风</b><small>与聊天相同：回声消除、降噪、自动增益</small></div><button data-step="mic">打开</button></div>
+<div class="row"><div><b>② 音量检测</b><small>小宇头像跟着声音动的部分</small></div><button data-step="meter" disabled>打开</button></div>
+<div class="row"><div><b>③ 录音器</b><small>录下说的话（每 0.25 秒一段）</small></div><button data-step="recorder" disabled>打开</button></div>
+<div class="row"><div><b>④ 播放通道</b><small>小宇说话用的通道，运行但不出声</small></div><button data-step="playback">打开</button></div>
+<div class="row"><div><b>⑤ 关闭回声消除</b><small>麦克风改为不做回声消除和降噪（需先关掉①再重开）</small></div><button data-step="raw">打开</button></div>
+
+<meter id="level" min="0" max="0.3" value="0"></meter>
+<p id="status" role="status"></p>
+<p><button id="reset">全部关掉</button></p>
+
+<script>
+const $ = selector => document.querySelector(selector);
+const state = { stream: null, meterContext: null, meterFrame: null, recorder: null, playback: null, raw: false };
+const status = text => { $("#status").textContent = text; };
+const button = step => $(`[data-step="${step}"]`);
+const press = (step, on) => { button(step).setAttribute("aria-pressed", String(on)); button(step).textContent = on ? "关闭" : "打开"; };
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+async function openMic() {
+  // Same constraints as the chat (src/services/microphoneInput.js), unless ⑤ is on.
+  const audio = state.raw ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 }
+    : { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+  state.stream = await navigator.mediaDevices.getUserMedia({ audio });
+  ["meter", "recorder"].forEach(step => { button(step).disabled = false; });
+}
+function closeMic() {
+  stopMeter(); stopRecorder();
+  state.stream?.getTracks().forEach(track => track.stop());
+  state.stream = null;
+  ["meter", "recorder"].forEach(step => { button(step).disabled = true; });
+}
+async function startMeter() {
+  state.meterContext = new AudioContextClass();
+  await state.meterContext.resume();
+  const analyser = state.meterContext.createAnalyser();
+  analyser.fftSize = 2048;
+  state.meterContext.createMediaStreamSource(state.stream).connect(analyser);
+  const samples = new Float32Array(analyser.fftSize);
+  const tick = () => {
+    analyser.getFloatTimeDomainData(samples);
+    let sum = 0; for (const sample of samples) sum += sample * sample;
+    $("#level").value = Math.sqrt(sum / samples.length);
+    state.meterFrame = requestAnimationFrame(tick);
+  };
+  tick();
+}
+function stopMeter() {
+  cancelAnimationFrame(state.meterFrame); state.meterFrame = null;
+  state.meterContext?.close().catch(() => {}); state.meterContext = null;
+  $("#level").value = 0; press("meter", false);
+}
+function startRecorder() {
+  const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(item => window.MediaRecorder?.isTypeSupported?.(item));
+  state.recorder = new MediaRecorder(state.stream, type ? { mimeType: type } : undefined);
+  state.recorder.start(250);
+}
+function stopRecorder() {
+  if (state.recorder && state.recorder.state !== "inactive") state.recorder.stop();
+  state.recorder = null; press("recorder", false);
+}
+async function startPlayback() {
+  // Like Xiaoyu's playback context after a reply: running, connected to the speaker, silent.
+  state.playback = new AudioContextClass();
+  await state.playback.resume();
+  const silent = state.playback.createBufferSource();
+  silent.buffer = state.playback.createBuffer(1, state.playback.sampleRate, state.playback.sampleRate);
+  silent.loop = true; silent.connect(state.playback.destination); silent.start();
+}
+function stopPlayback() { state.playback?.close().catch(() => {}); state.playback = null; press("playback", false); }
+
+const actions = {
+  mic: on => (on ? openMic() : closeMic()),
+  meter: on => (on ? startMeter() : stopMeter()),
+  recorder: on => (on ? startRecorder() : stopRecorder()),
+  playback: on => (on ? startPlayback() : stopPlayback()),
+  raw: on => { state.raw = on; status(on ? "已设为不做回声消除。请关掉①再重新打开①。" : "已恢复回声消除。请关掉①再重新打开①。"); }
+};
+document.querySelectorAll("[data-step]").forEach(element => element.addEventListener("click", async () => {
+  const step = element.dataset.step, on = element.getAttribute("aria-pressed") !== "true";
+  try {
+    await actions[step](on);
+    press(step, on);
+    if (step !== "raw") status(on ? `已打开 ${element.closest(".row").querySelector("b").textContent}，说几句话听听。` : "");
+  } catch (error) { status(`没能打开：${error.message}`); }
+}));
+$("#reset").addEventListener("click", () => { closeMic(); stopPlayback(); press("mic", false); status("已全部关掉。"); });
+</script>
+</body>
+</html>

@@ -17,7 +17,7 @@ async function withCapture(run, resumeFails = false) {
   class AudioContext {
     state = "suspended";
     async resume() { resumed = true; if (resumeFails) throw new Error("blocked"); this.state = "running"; }
-    createMediaStreamSource() { return { connect() {} }; }
+    createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
     createAnalyser() { return { getFloatTimeDomainData(data) { data.fill(level); } }; }
     async close() { this.state = "closed"; }
   }

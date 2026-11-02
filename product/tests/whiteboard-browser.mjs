@@ -55,11 +55,17 @@ try {
         await route.fulfill({ status: 503, body: "Test uses streaming PCM" });
         return;
       }
-      else if (path === "/api/tutor/quick" || path === "/api/tutor") {
+      else if (path === "/api/tutor/quick" || path === "/api/tutor/quick/stream" || path === "/api/tutor") {
         tutorCalls++;
         const payload = route.request().postDataJSON();
         assert.equal(payload.input, "那恐龙呢");
         if (path.endsWith("/quick")) result = { reply: "你想知道恐龙的什么呢？", llmStatus: { used: true } };
+        else if (path.endsWith("/stream")) {
+          // The page asks for the reply sentence by sentence; answer in that format.
+          const reply = "你想知道恐龙的什么呢？";
+          await route.fulfill({ contentType: "application/x-ndjson", body: `${JSON.stringify({ type: "sentence", text: reply })}\n${JSON.stringify({ type: "done", reply, llmStatus: { used: true } })}\n` });
+          return;
+        }
         else {
           releaseEnrichment.started();
           await enrichmentGate;

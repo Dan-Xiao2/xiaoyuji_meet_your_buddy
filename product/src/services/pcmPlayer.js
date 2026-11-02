@@ -1,5 +1,6 @@
 // PCM16 little-endian mono chunks share one playback timeline, including split samples.
-export function createPcmPlayer(context, { sampleRate = 24000, onStart, onEnd } = {}) {
+// destination: where audio goes (the page output bus, so its level can be measured); default speaker.
+export function createPcmPlayer(context, { sampleRate = 24000, onStart, onEnd, destination = context.destination } = {}) {
   const sources = new Set();
   let carry = null;
   let nextTime = 0;
@@ -23,7 +24,7 @@ export function createPcmPlayer(context, { sampleRate = 24000, onStart, onEnd } 
       const view = new DataView(bytes.buffer, bytes.byteOffset, length * 2);
       for (let i = 0; i < length; i++) floats[i] = view.getInt16(i * 2, true) / 32768;
       const source = context.createBufferSource();
-      source.buffer = buffer; source.connect(context.destination);
+      source.buffer = buffer; source.connect(destination);
       const at = Math.max(context.currentTime + 0.05, nextTime);
       nextTime = at + buffer.duration;
       sources.add(source);

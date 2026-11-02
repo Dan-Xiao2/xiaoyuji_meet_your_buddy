@@ -21,7 +21,7 @@ import { renderMemoryArchive, renderMemoryDashboard } from "./ui/memoryPanel.js"
 import { mountArchiveControls } from "./ui/archiveControls.js";
 import { mountMicrophoneSettings } from "./ui/microphoneSettings.js";
 import { recognitionCorpus } from "./features/voice/recognitionCorpus.js";
-import { getBargeInEnabled, setBargeInEnabled } from "./services/microphoneInput.js";
+import { getBargeInEnabled, setBargeInEnabled, getRealtimeEnabled, setRealtimeEnabled } from "./services/microphoneInput.js";
 import { createPilotLog } from "./services/pilotLog.js";
 import { bindPilotLogPanel } from "./ui/pilotLogPanel.js";
 import { REVISION_KEY } from "./services/localPersistence.js";
@@ -202,6 +202,11 @@ let hasLiveVoiceLevel = false;
 let voicePressStartedAt = 0;
 let voicePointerStopsExisting = false;
 const microphoneSettings = mountMicrophoneSettings({ beforeCapture: () => stopInteraction() });
+const realtimeToggle = document.querySelector("[data-realtime-asr]");
+if (realtimeToggle) {
+  realtimeToggle.checked = getRealtimeEnabled();
+  realtimeToggle.addEventListener("change", () => setRealtimeEnabled(realtimeToggle.checked));
+}
 const bargeInToggle = document.querySelector("[data-barge-in]");
 // Replies the child spoke over. The next request marks them, so the model does not assume the child
 // heard (or accepted) the rest. Marked only in the next request's history, never on the reply that
@@ -223,7 +228,7 @@ const voiceSession = createVoiceSession({
     canListen: dom.workspace.dataset.activeView === "learn" && !document.hidden,
     pending: conversation.getSnapshot().awaitingReply || drawingRequests.getSnapshot().phase === "pending",
     cloudTranscription: voiceCloudStatus?.cloudTranscription,
-    realtimeTranscription: voiceCloudStatus?.realtimeTranscription,
+    realtimeTranscription: voiceCloudStatus?.realtimeTranscription && realtimeToggle?.checked !== false,
     bargeIn: Boolean(bargeInToggle?.checked),
     // A getter: getContext() runs on every audio frame, the corpus is needed once per capture.
     get asrCorpus() { return recognitionCorpus(state.messages); }
@@ -863,9 +868,20 @@ async function sendChildInput(text, source = {}) {
     conversation.settle(turn, true, submission.kind);
     return accepted;
   }
+  // Speak the quick reply sentence by sentence as it arrives, instead of after the whole reply is
+  // written and committed. Any sentence failing the local output check stops this early playback;
+  // the committed reply then takes the usual path, which replaces unsafe text.
+  let earlyReply = null, earlyBlocked = false;
+  const onQuickSentence = text => {
+    if (earlyBlocked || !dom.speakReplies.checked) return;
+    if (!checkTutorSafetyOutput(text).ok) { earlyBlocked = true; earlyReply?.cancel(); earlyReply = null; return; }
+    earlyReply ||= voiceSession.playStreamingReply();
+    earlyReply.push(text);
+  };
   const outcome = await conversation.run({
     turn,
     input: cleanText,
+    onQuickSentence,
     stateForRequest,
     localTurn,
     fallbackReply,
@@ -890,8 +906,12 @@ async function sendChildInput(text, source = {}) {
         // A later model/event failure does not undo a moment that was already written.
         savedMoment = saved.moment;
       });
-      if (!accepted) return false;
-      speakLatestTutorReply(replyMessageId);
+      if (!accepted) { earlyReply?.cancel(); return false; }
+      if (earlyReply) {
+        document.querySelector("#speechFailure").hidden = true;
+        earlyReply.attach(replyMessageId);
+        earlyReply.end();
+      } else speakLatestTutorReply(replyMessageId);
       return state;
     }
   });

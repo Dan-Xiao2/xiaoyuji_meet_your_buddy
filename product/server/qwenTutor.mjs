@@ -8,8 +8,13 @@ import { drawingCapability, conversationPrinciple, drawingExecutionRule } from "
 import { guardDrawingReply } from "./drawingReplyGuard.mjs";
 import { isLessonAnswer, isInteractionControl, conversationControlReply, explorationInstruction } from "../src/services/conversationIntent.js";
 import { scienceInstruction, guardScienceReply } from "./scienceContext.mjs";
-
 import { turnGuidance, responseBoundaryInstruction } from "./turnGuidance.mjs";
+
+// The spoken reply uses a stronger model than the background enrichment: in a side-by-side of five
+// scripted child conversations (2026-11-02) qwen3.8-max was the only model that left concrete hooks,
+// rarely asked twice in a row and kept the science right; qwen3.7-flash repeated itself and mixed up
+// moon phases with eclipses. First sentence ~1.4 s vs ~0.9 s, so replies are spoken sentence by sentence.
+export const quickModel = () => process.env.QWEN_QUICK_MODEL || "qwen3.8-max";
 
 const DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 
@@ -108,7 +113,7 @@ export async function createQuickTutorReplyWithQwen(input, currentState, fallbac
   try {
     const quickResult = await callQwenQuickReply(input, currentState, knowledge, signal);
     signal?.throwIfAborted();
-    const grounded = guardScienceReply(quickResult.reply, input, currentState);
+    const grounded = guardScienceReply(dropSelfFeeling(quickResult.reply), input, currentState);
     const drawingGuard = guardDrawingReply(grounded.reply, input, currentState);
     const reply = drawingGuard.reply;
     if (!checkTutorSafetyOutput(reply).ok) throw new Error("Quick reply rejected by safety rules");
@@ -116,7 +121,7 @@ export async function createQuickTutorReplyWithQwen(input, currentState, fallbac
       reply: adaptTutorReply(reply, currentState.profile?.ageBand),
       llmStatus: {
         provider: "qwen",
-        model: process.env.QWEN_MODEL || "qwen3.7-flash",
+        model: quickModel(),
         used: true,
         fallback: false,
         latencyMs: Date.now() - startedAt,
@@ -143,6 +148,7 @@ export async function createQuickTutorReplyWithQwen(input, currentState, fallbac
 }
 
 const SENTENCE_END = /^([\s\S]*?[。！？!?]+)/u;
+const FIRST_CLAUSE = /^([^。！？!?]{8,}?[，,])/u;
 
 // Streams the quick reply one finished sentence at a time, so speech can start before the model
 // has finished. Each sentence must pass the same checks as the whole-reply path, applied to the
@@ -185,7 +191,7 @@ export async function* streamQuickTutorReplyWithQwen(input, currentState, fallba
   // reply, or both. The fallback and guard replacements are only used while nothing was said.
   const check = (raw) => {
     const sentence = raw.replace(/\s+/g, " ").replace(/([。！？!?])[。！？!?]+/g, "$1").trim();
-    if (!sentence) return { skip: true };
+    if (!sentence || SELF_FEELING.test(sentence)) return { skip: true };
     const soFar = [...spoken, sentence];
     const whole = soFar.join("");
     const replace = (text, reason) => (spoken.length ? { stop: reason } : { text, stop: reason });
@@ -208,6 +214,12 @@ export async function* streamQuickTutorReplyWithQwen(input, currentState, fallba
       for (let match; (match = SENTENCE_END.exec(buffer));) {
         pending.push(match[1]);
         buffer = buffer.slice(match[0].length);
+      }
+      // Only before anything is spoken: a long opening clause is released at its comma, so speech
+      // can begin before the model finishes a long first sentence (qwen3.8-max often writes one).
+      if (!spoken.length && !pending.length) {
+        const clause = FIRST_CLAUSE.exec(buffer);
+        if (clause) { pending.push(clause[1]); buffer = buffer.slice(clause[0].length); }
       }
       if (ended && buffer.trim()) { pending.push(buffer); buffer = ""; }
       for (const raw of pending.splice(0)) {
@@ -243,7 +255,7 @@ export async function* streamQuickTutorReplyWithQwen(input, currentState, fallba
   }
   yield { type: "done", llmStatus: {
     provider: "qwen",
-    ...(fellBack ? {} : { model: process.env.QWEN_MODEL || "qwen3.7-flash" }),
+    ...(fellBack ? {} : { model: quickModel() }),
     used: !fellBack,
     fallback: fellBack,
     streamed: true,
@@ -329,6 +341,20 @@ function historyLine(message) {
   return message.interrupted ? `${name}（说到一半被孩子打断，孩子可能没听完）: ${message.text}` : `${name}: ${message.text}`;
 }
 
+// "听到你开心，小宇也觉得心里暖暖的" kept appearing when a child said only "开心", even when the
+// prompt forbade it. Such a sentence says nothing the child can answer, so it is removed; a reply
+// that would be left empty keeps it.
+const SELF_FEELING = /(?:听到你[^。！？!?，,]{0,6}(?:开心|高兴|快乐)|(?:小宇|我)(?:也|都|跟着)[^。！？!?]{0,8}(?:开心|高兴|快乐|暖暖|激动))/u;
+export function dropSelfFeeling(reply) {
+  const sentences = String(reply || "").match(/[^。！？!?]+[。！？!?]?/gu) || [];
+  const kept = sentences.filter(sentence => !SELF_FEELING.test(sentence));
+  return kept.length && kept.length < sentences.length ? kept.join("").trim() : String(reply || "");
+}
+
+// Seen with a real child (2026-11-02): replies only echoed the child or added a feeling ("听到你开心
+// 我也很高兴"), so the child did not know what to say next. Every reply now leaves an easy way in.
+const conversationHookInstruction = "每轮都给孩子留一个容易接的话头，让孩子知道接下来可以说什么。话头优先是一个和他刚才的话直接相关、他能看见或想象的具体新细节（一个小发现、一个有趣的样子或声音）；也可以是一个关于他自己经历的好回答的小问题（比如“它是什么颜色的？”）。话头不能是邀请画画、讲故事或看图。不要连续两轮都以问题结尾，不考孩子知识，不刷二选一题，不重复前面已经说过的事实。孩子说“我不知道”是不知道答案，不是不想说：给一个小提示，或者由你说一个有趣的细节；孩子说“嗯”“哦”只是听到了，不是拒绝：接着给一个新的具体东西。孩子说“没有了”“不想说了”时，不再追问这件事，换一个相关的新角度或让孩子自己决定，不提议画画或讲故事。孩子说出感受时用半句话接住，再接一个具体的东西；不说“小宇也很开心”“听到你开心我也很高兴”“真有趣呀”这类表态和空话。";
+
 // The quick reply is read aloud. Without this, replies to "why" questions fell into a textbook
 // "因为……。……。所以……。" pattern (6 of 8 sampled answers on 2026-11-02).
 // Seen on a real iPhone (2026-11-02): after the child said there was no "软软的沙子", Xiaoyu kept
@@ -337,7 +363,7 @@ const followChildInstruction = "孩子否定或纠正时（比如说“没有”
 const spokenStyleInstruction = "说话像坐在孩子身边随口聊天，不像讲课或念课本：先用孩子自己的词接住他说的话，再用口语讲。不要用“因为……所以……”框住整段回答，不要每轮都用同样的开头或结尾，语气词不要堆叠。口语化不等于换掉原因：为什么问题仍要先把真正的原因说对，再配一个看得见的例子。";
 
 function buildQuickReplyBody(input, currentState, knowledge, { stream = false } = {}) {
-  const model = process.env.QWEN_MODEL || "qwen3.7-flash";
+  const model = quickModel();
   const speaker = currentState.activeSpeaker || { name: currentState.profile?.name || "孩子", role: "child" };
   const recentMessages = safeConversationMessages(currentState.messages)
     .slice(-12)
@@ -364,6 +390,8 @@ function buildQuickReplyBody(input, currentState, knowledge, { stream = false } 
           "孩子明确要求故事时才讲一个很短的开头；普通为什么问题先直接解释。",
           spokenStyleInstruction,
           followChildInstruction,
+          conversationHookInstruction,
+          // QUICK_TURN_GUIDANCE=false turns the per-turn instruction off (for comparisons).
           speaker.role === "child" && process.env.QUICK_TURN_GUIDANCE !== "false" ? turnGuidance(input, currentState.messages || []) : "",
           createKnowledgeContext(knowledge),
           responseBoundaryInstruction

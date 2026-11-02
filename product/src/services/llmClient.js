@@ -46,7 +46,53 @@ export async function callTutorApi(payload, { signal } = {}) {
   }
 }
 
-export async function callQuickTutorApi(payload, { signal } = {}) {
+// Sentence by sentence: onSentence(text) is called for each checked sentence as it arrives, so
+// speech can start before the reply is complete. Resolves like callQuickTutorApi. If the stream
+// fails before any sentence, falls back to the whole-reply request; after some sentences, the reply
+// is what was already said (it cannot be taken back).
+async function streamQuickTutorApi(payload, { signal, onSentence }) {
+  const startedAt = window.performance.now();
+  const sentences = [];
+  try {
+    const response = await fetch("/api/tutor/quick/stream", {
+      method: "POST",
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(createTutorRequest(payload))
+    });
+    if (!response.ok || !response.body) throw new Error("Quick tutor stream failed");
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "", done = null;
+    for (;;) {
+      const { value, done: finished } = await reader.read();
+      if (finished) break;
+      buffer += value;
+      let newline;
+      while ((newline = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (!line) continue;
+        const item = JSON.parse(line);
+        if (item.type === "sentence" && typeof item.text === "string" && item.text) {
+          sentences.push(item.text);
+          onSentence(item.text);
+        } else if (item.type === "done") done = item;
+      }
+    }
+    if (!done) throw new Error("Quick tutor stream ended early");
+    return { reply: done.reply || sentences.join(""), llmStatus: done.llmStatus, streamed: true,
+      clientLatencyMs: Math.round(window.performance.now() - startedAt) };
+  } catch (error) {
+    if (signal?.aborted) return { reply: "", cancelled: true };
+    if (!sentences.length) return callQuickTutorApi(payload, { signal });
+    console.warn("Quick reply stream ended early", error);
+    return { reply: sentences.join(""), streamed: true, llmStatus: { provider: "qwen", used: true, fallback: false, partial: true },
+      clientLatencyMs: Math.round(window.performance.now() - startedAt) };
+  }
+}
+
+export async function callQuickTutorApi(payload, { signal, onSentence } = {}) {
+  if (onSentence && window.location.protocol !== "file:") return streamQuickTutorApi(payload, { signal, onSentence });
   if (window.location.protocol === "file:") {
     return {
       reply: payload.fallbackReply || "我听到了。我们一起想一想。",

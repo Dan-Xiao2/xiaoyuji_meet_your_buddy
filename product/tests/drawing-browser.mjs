@@ -25,9 +25,14 @@ try {
           : payload.input === "画一只恐龙" ? { mode: "image", operation: "create", instruction: payload.input, available: false }
           : payload.input === "画一只鲸鱼" ? {}
           : null;
-      } else if (path === "/api/tutor/quick") {
+      } else if (path === "/api/tutor/quick" || path === "/api/tutor/quick/stream") {
         const payload = route.request().postDataJSON(); requests.push(payload.input);
         response = { reply: "太阳里面的变化会放出很多能量，所以会发光。", llmStatus: { used: false } };
+        // The page asks for the reply sentence by sentence; answer in that format.
+        if (path.endsWith("/stream")) {
+          await route.fulfill({ contentType: "application/x-ndjson", body: `${JSON.stringify({ type: "sentence", text: response.reply })}\n${JSON.stringify({ type: "done", ...response })}\n` });
+          return;
+        }
       }
       if (!response) {
         unexpected.push(path);

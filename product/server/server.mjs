@@ -8,7 +8,7 @@ import { extname, isAbsolute, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createVoiceLab } from "./voiceLab.mjs";
 import { loadLocalEnv } from "./env.mjs";
-import { createQuickTutorReplyWithQwen, createTutorTurnWithQwen } from "./qwenTutor.mjs";
+import { createQuickTutorReplyWithQwen, createTutorTurnWithQwen, streamQuickTutorReplyWithQwen } from "./qwenTutor.mjs";
 import { getSpeechStatus, synthesizeSpeech, transcribeAudio } from "./qwenSpeech.mjs";
 import { openSpeechStream } from "./speechStream.mjs";
 import { planDrawingWithQwen } from "./drawingPlanner.mjs";
@@ -37,7 +37,7 @@ const publicPrefixes = [
   "/src/", "/assets/", "/design-drafts/",
   "/node_modules/motion/", "/node_modules/roughjs/", "/node_modules/konva/", "/node_modules/lucide/"
 ];
-const publicFiles = new Set(["/index.html", "/voice-lab.html", "/docs/architecture/xiaoyuji-runtime.architecture.html"]);
+const publicFiles = new Set(["/index.html", "/voice-lab.html", "/mic-check.html", "/docs/architecture/xiaoyuji-runtime.architecture.html"]);
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -220,6 +220,36 @@ async function handleRequest(request, response) {
       requireObject(body.state, "state");
       const result = await createQuickTutorReplyWithQwen(body.input, createTutorContext(body.state), body.fallbackReply || "", { signal: abort.signal });
       if (!response.destroyed) sendJson(response, 200, result);
+    } finally {
+      abort.abort();
+    }
+    return;
+  }
+
+  // The same quick reply, one checked sentence per line, so the page can start speaking the first
+  // sentence while the rest is still being written. The last line carries the whole reply and status.
+  if (request.method === "POST" && pathname === "/api/tutor/quick/stream") {
+    const abort = new AbortController();
+    response.once("close", () => abort.abort());
+    try {
+      const body = await readJson(request, limits.tutor);
+      requireString(body.input, "input", 4000);
+      requireObject(body.state, "state");
+      response.writeHead(200, { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store", "X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff" });
+      const sentences = [];
+      for await (const item of streamQuickTutorReplyWithQwen(body.input, createTutorContext(body.state), body.fallbackReply || "", { signal: abort.signal })) {
+        if (response.destroyed) break;
+        if (item.type === "sentence") {
+          sentences.push(item.text);
+          response.write(`${JSON.stringify({ type: "sentence", text: item.text })}\n`);
+        } else if (item.type === "done") {
+          response.write(`${JSON.stringify({ type: "done", reply: sentences.join(""), llmStatus: item.llmStatus })}\n`);
+        }
+      }
+      response.end();
+    } catch (error) {
+      // Headers may already be sent; the page treats a stream without "done" as failed.
+      if (response.headersSent) response.destroy(); else throw error;
     } finally {
       abort.abort();
     }

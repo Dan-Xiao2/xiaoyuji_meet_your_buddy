@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInitialState } from "../src/data/studentModel.js";
-import { createQuickTutorReplyWithQwen } from "../server/qwenTutor.mjs";
+import { createQuickTutorReplyWithQwen, quickModel } from "../server/qwenTutor.mjs";
 import { generateOpenDrawing, imageConfig } from "../server/openDrawing.mjs";
 import { loadLocalEnv } from "../server/env.mjs";
 
@@ -113,7 +113,8 @@ const report = {
   mode: "live-provider",
   configuration: {
     provider: "qwen",
-    requestedTextModel: process.env.QWEN_MODEL || "qwen3.7-flash",
+    // The spoken quick reply has its own model (QWEN_QUICK_MODEL); QWEN_MODEL is background enrichment.
+    requestedTextModel: quickModel(),
     requestedImageModel: includeImages ? imageConfig({ ...process.env, IMAGE_DRAWING_ENABLED: "true" }).model : null,
     requestedImageReviewModel: includeImages ? imageConfig({ ...process.env, IMAGE_DRAWING_ENABLED: "true" }).reviewModel : null,
     repeats,

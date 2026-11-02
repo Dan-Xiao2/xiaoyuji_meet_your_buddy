@@ -21,10 +21,25 @@ export function setBargeInEnabled(enabled) {
   try { window.localStorage.setItem(BARGE_IN_KEY, enabled ? "on" : "off"); } catch { /* keep the in-page choice */ }
 }
 
-export async function openMicrophone() {
+// Realtime recognition streams audio while the child speaks (faster). A parent can turn it off to
+// recognise after speaking instead, e.g. when a device makes noise during realtime capture.
+export const REALTIME_KEY = "xiaoyuji-realtime-asr-v1";
+
+export function getRealtimeEnabled() {
+  try { return window.localStorage?.getItem(REALTIME_KEY) !== "off"; } catch { return true; }
+}
+
+export function setRealtimeEnabled(enabled) {
+  try { window.localStorage.setItem(REALTIME_KEY, enabled ? "on" : "off"); } catch { /* keep the in-page choice */ }
+}
+
+// voiceProcessing: false opens the microphone without echo cancellation, noise suppression or
+// gain control. Used only to listen for barge-in while Xiaoyu speaks: on an iPhone, recording with
+// echo cancellation during playback switches to call audio (muffled, with an electric noise).
+export async function openMicrophone({ voiceProcessing = true } = {}) {
   const id = getMicrophoneId();
   const stream = await navigator.mediaDevices.getUserMedia({ audio: {
-    echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1,
+    echoCancellation: voiceProcessing, noiseSuppression: voiceProcessing, autoGainControl: voiceProcessing, channelCount: 1,
     ...(id ? { deviceId: { exact: id } } : {})
   } });
   const track = stream.getAudioTracks()[0];

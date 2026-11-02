@@ -1,7 +1,9 @@
 // corpus: recent conversation text, sent before any audio so the recogniser prefers words already
 // used in this conversation over same-sounding ones.
-export async function createRealtimeCapture(stream, { onTiming, corpus = "" } = {}) {
-  const context = new AudioContext({ sampleRate: 16000 });
+// context: the page's shared AudioContext (see voiceService.js), left open on release; without one
+// a private context is created and closed. Native rate: the worklet converts to 16 kHz itself.
+export async function createRealtimeCapture(stream, { onTiming, corpus = "", context: shared = null } = {}) {
+  const context = shared || new AudioContext();
   let node, source, socket, timer, flushTimer, flushResolve;
   let active = false, ready = false, stopped = false, finishing = false, settled = false;
   let queue = [], queuedBytes = 0, connectedAt = 0;
@@ -10,7 +12,7 @@ export async function createRealtimeCapture(stream, { onTiming, corpus = "" } = 
   const releaseCapture = () => {
     source?.disconnect(); node?.disconnect();
     if (node) node.port.onmessage = null;
-    if (context.state !== "closed") context.close().catch(() => {});
+    if (!shared && context.state !== "closed") context.close().catch(() => {});
   };
   const settle = value => {
     if (settled) return;
@@ -40,7 +42,7 @@ export async function createRealtimeCapture(stream, { onTiming, corpus = "" } = 
     }
   };
   try {
-    if (context.sampleRate !== 16000) throw new Error("Unsupported input sample rate");
+    if (context.sampleRate < 16000) throw new Error("Unsupported input sample rate");
     await Promise.race([
       (async () => {
         await context.resume();
@@ -49,9 +51,11 @@ export async function createRealtimeCapture(stream, { onTiming, corpus = "" } = 
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Audio setup timed out")), 3000); })
     ]);
     clearTimeout(timer);
-    node = new AudioWorkletNode(context, "asr-capture");
+    // No output: the capture graph is never connected to the speaker. On an iPhone, a running
+    // output while the microphone records was a suspect for noise heard while the child spoke.
+    node = new AudioWorkletNode(context, "asr-capture", { numberOfInputs: 1, numberOfOutputs: 0 });
     source = context.createMediaStreamSource(stream);
-    source.connect(node).connect(context.destination);
+    source.connect(node);
     node.port.onmessage = ({ data }) => {
       if (data?.type === "flushed") { clearTimeout(flushTimer); flushResolve?.(); }
       else if (data instanceof ArrayBuffer) append(data);

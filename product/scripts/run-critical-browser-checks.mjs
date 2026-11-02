@@ -19,6 +19,8 @@ const tests = [
   "tests/exploration-pipeline-browser.mjs",
   "tests/pilot-log-browser.mjs",
   "tests/barge-in-browser.mjs",
+  "tests/streaming-reply-browser.mjs",
+  "tests/asr-capture-browser.mjs",
   "tests/child-safety-browser.mjs",
   "tests/drawing-browser.mjs",
   "tests/whiteboard-browser.mjs",

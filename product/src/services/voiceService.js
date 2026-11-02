@@ -18,6 +18,7 @@ export function createVoiceController() {
   let stopTimer = null;
   let finishRequested = false;
   let meterContext = null;
+  let meterSource = null;
   let meterFrame = null;
   let meterStream = null;
   let meterOwnsStream = false;
@@ -55,15 +56,57 @@ export function createVoiceController() {
 
   // While a reply plays, listen for the child starting to speak. onBargeIn is called once; the
   // open stream is kept briefly for the capture that follows (unused, it is released after 2 s).
+  // With streamed playback the output level is measurable, so the microphone opens without echo
+  // cancellation (no call audio on iPhone) and the detector compares it with what is playing. The
+  // whole-file fallback plays outside the page's audio graph, so it keeps echo cancellation.
+  // A raw stream is not handed to the following capture: without gain control a quiet child could
+  // be missed, so listening reopens the microphone with normal processing.
   function watchForBargeIn(onBargeIn) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!recordingSupported || !secureEnough || !AudioContextClass) return { stop() {} };
-    return startBargeInMonitor({ openStream: openMicrophone, AudioContextClass, onTrigger: (opened) => {
-      dropHandoff();
-      handoffStream = opened;
-      handoffTimer = window.setTimeout(dropHandoff, 2000);
-      onBargeIn();
-    } });
+    const referenced = Boolean(pcmPlayer && outputAnalyser);
+    return startBargeInMonitor({ openStream: () => openMicrophone({ voiceProcessing: !referenced }), AudioContextClass,
+      context: sharedAudioContext(), playbackLevel: referenced ? playbackLevel : () => 0, onTrigger: (opened) => {
+        dropHandoff();
+        if (referenced) opened.getTracks().forEach((track) => track.stop());
+        else { handoffStream = opened; handoffTimer = window.setTimeout(dropHandoff, 2000); }
+        onBargeIn();
+      } });
+  }
+
+  // Output bus on the shared context: streamed speech goes through it so its level can be read.
+  let outputBus = null, outputAnalyser = null, outputSamples = null;
+  function playbackOutput() {
+    const context = sharedAudioContext();
+    if (!context) return undefined;
+    if (!outputBus || outputBus.context !== context) {
+      try {
+        outputBus = context.createGain();
+        outputAnalyser = context.createAnalyser();
+        outputAnalyser.fftSize = 1024;
+        outputSamples = new Float32Array(outputAnalyser.fftSize);
+        outputBus.connect(context.destination);
+        outputBus.connect(outputAnalyser);
+      } catch { outputBus = null; outputAnalyser = null; return context.destination; }
+    }
+    return outputBus;
+  }
+  function playbackLevel() {
+    if (!outputAnalyser) return 0;
+    outputAnalyser.getFloatTimeDomainData(outputSamples);
+    let sum = 0;
+    for (const sample of outputSamples) sum += sample * sample;
+    return Math.sqrt(sum / outputSamples.length);
+  }
+
+  // One AudioContext for the whole page: playback, the level meter, realtime capture and barge-in.
+  // On an iPhone, chat used up to four contexts at once around the microphone and the child heard
+  // crackling "electric" noise while speaking; the microphone test with one context had none.
+  function sharedAudioContext() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    try { playbackContext ||= new AudioContextClass(); } catch { return null; }
+    return playbackContext;
   }
 
   function preparePlayback() {
@@ -71,11 +114,12 @@ export function createVoiceController() {
     if (!AudioContextClass) return;
     try {
       playbackContext ||= new AudioContextClass();
-      if (playbackContext.state === "suspended") playbackContext.resume().catch(() => {});
+      // iOS Safari also has "interrupted" (after the microphone or audio session changes), not only "suspended".
+      if (playbackContext.state !== "running" && playbackContext.state !== "closed") playbackContext.resume().catch(() => {});
     } catch { /* Whole-response cloud audio remains available. */ }
   }
 
-  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRecorder = false, preferRealtime = false, asrCorpus = "" }) {
+  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRecorder = false, preferRealtime = false, asrCorpus = "", noSpeechTimeoutMs }) {
     stopListening();
     finishRequested = false;
     const requestId = listeningRequestId;
@@ -86,7 +130,7 @@ export function createVoiceController() {
     }
 
     if (preferRecorder && recordingSupported) {
-      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime, asrCorpus }, requestId);
+      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime, asrCorpus, noSpeechTimeoutMs }, requestId);
       return;
     }
 
@@ -173,7 +217,7 @@ export function createVoiceController() {
     if (recorder && recorder.state !== "inactive") recorder.stop();
   }
 
-  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime = false, asrCorpus = "" }, requestId) {
+  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, preferRealtime = false, asrCorpus = "", noSpeechTimeoutMs }, requestId) {
     if (!secureEnough) {
       onError?.("浏览器要求在 localhost 或 HTTPS 页面里使用麦克风。请用本地预览地址打开。");
       return;
@@ -207,7 +251,7 @@ export function createVoiceController() {
     const recordedChunks = [];
     let captureStartedAt = 0;
     let speechStartOffsetMs = 0;
-    const activity = createVoiceActivityDetector();
+    const activity = createVoiceActivityDetector(noSpeechTimeoutMs ? { idleTimeoutMs: noSpeechTimeoutMs } : {});
     let speechDetected = false;
     let stopReason = "manual";
     const mimeType = pickMimeType();
@@ -222,7 +266,7 @@ export function createVoiceController() {
     let realtime = null;
     if (preferRealtime) {
       try {
-        realtime = await createRealtimeCapture(stream, { onTiming, corpus: asrCorpus });
+        realtime = await createRealtimeCapture(stream, { onTiming, corpus: asrCorpus, context: sharedAudioContext() });
         if (requestId !== listeningRequestId || finishRequested) {
           realtime.cancel();
           if (requestId === listeningRequestId) { cleanupRecorderOnly(); onEnd?.(""); }
@@ -372,7 +416,8 @@ export function createVoiceController() {
 
       meterStream = nextStream;
       meterOwnsStream = !sourceStream;
-      meterContext = new AudioContextClass();
+      meterContext = sharedAudioContext();
+      if (!meterContext) throw new Error("Audio input unavailable");
       if (meterContext.state === "suspended") {
         let resumeTimer;
         try {
@@ -385,6 +430,7 @@ export function createVoiceController() {
       if (requestId !== meterRequestId) return false;
       if (meterContext.state !== "running") throw new Error("Audio input unavailable");
       const source = meterContext.createMediaStreamSource(nextStream);
+      meterSource = source;
       const analyser = meterContext.createAnalyser();
       analyser.fftSize = 2048;
       analyser.smoothingTimeConstant = 0.72;
@@ -421,7 +467,9 @@ export function createVoiceController() {
     if (meterOwnsStream && meterStream) meterStream.getTracks().forEach((track) => track.stop());
     meterStream = null;
     meterOwnsStream = false;
-    if (meterContext && meterContext.state !== "closed") meterContext.close().catch(() => {});
+    // The shared context stays open for playback; only this meter's nodes are released.
+    meterSource?.disconnect();
+    meterSource = null;
     meterContext = null;
   }
 
@@ -472,6 +520,96 @@ export function createVoiceController() {
     const requestId = speechRequestId;
     playSpeech(text, callbacks, requestId, prepared);
     return true;
+  }
+
+  // Speaks a reply that arrives sentence by sentence. Each sentence's speech is requested as soon as
+  // the sentence arrives, while earlier ones are still playing, and all of them go onto one PCM
+  // timeline, so there is no gap between sentences. Returns { push(text), end() }; callbacks are as
+  // for speak(). If nothing could be streamed, the whole reply is spoken by the usual path once it
+  // has ended (an un-tapped whole-file play may still be blocked on iOS, as before).
+  function speakSentences(callbacks = {}) {
+    stopSpeaking();
+    const requestId = speechRequestId;
+    const live = () => requestId === speechRequestId;
+    const controller = new AbortController();
+    speechFetchController = controller;
+    const texts = [], requests = [];
+    let ended = false, wake = null, fallback = false, startedAt = 0;
+    const notify = () => { const resolve = wake; wake = null; resolve?.(); };
+    const speakWhole = () => { if (live()) playSpeech(texts.join(""), callbacks, requestId, null); };
+    const request = text => fetch("/api/speech/stream", { method: "POST", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(22000)]),
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+
+    void (async () => {
+      if (playbackContext && playbackContext.state !== "running" && playbackContext.state !== "closed") {
+        await Promise.race([playbackContext.resume().catch(() => {}), new Promise(resolve => window.setTimeout(resolve, 500))]);
+      }
+      if (!live()) return;
+      if (playbackContext?.state !== "running") throw new Error("Playback context not running");
+      let started = false;
+      const player = createPcmPlayer(playbackContext, { destination: playbackOutput(),
+        onStart: () => {
+          if (!live()) return;
+          started = true;
+          callbacks.onTiming?.({ stage: "tts-cloud-stream", latencyMs: 0 });
+          callbacks.onTiming?.({ stage: "tts-first-audio", latencyMs: Math.round(window.performance.now() - startedAt) });
+          callbacks.onStart?.();
+        },
+        onEnd: () => { if (live()) { pcmPlayer = null; callbacks.onEnd?.(); } }
+      });
+      pcmPlayer = player;
+      try {
+        for (let index = 0; ; index++) {
+          while (index >= requests.length && !ended) await new Promise(resolve => { wake = resolve; });
+          if (!live()) return;
+          if (index >= requests.length) break;
+          const response = await requests[index];
+          if (!live()) { await response.body?.cancel(); return; }
+          if (!response.ok || !response.headers.get("content-type")?.includes("audio/pcm")) throw new Error("PCM stream unavailable");
+          const reader = response.body.getReader();
+          try {
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (!live()) { await reader.cancel(); return; }
+              if (done) break;
+              if (value?.length) player.push(value);
+            }
+          } finally { reader.releaseLock(); }
+        }
+        player.finish();
+      } catch (error) {
+        if (started || player.hasAudio()) throw Object.assign(error, { hadAudio: true });
+        player.stop();
+        throw error;
+      }
+    })().catch(error => {
+      if (!live()) return;
+      pcmPlayer = null;
+      if (error.hadAudio) { callbacks.onError?.(); return; }
+      callbacks.onTiming?.({ stage: "tts-stream-fallback", latencyMs: 0 });
+      // Nothing was heard yet: speak the whole reply by the usual path once it is complete.
+      fallback = true;
+      if (ended) speakWhole();
+    });
+
+    return {
+      push(text) {
+        if (!live() || ended || !text) return;
+        if (!startedAt) startedAt = window.performance.now();
+        texts.push(text);
+        if (fallback) return;
+        const pending = request(text);
+        pending.catch(() => {});
+        requests.push(pending);
+        notify();
+      },
+      end() {
+        if (!live() || ended) return;
+        ended = true;
+        if (!texts.length) { callbacks.onEnd?.(); return; }
+        if (fallback) speakWhole(); else notify();
+      }
+    };
   }
 
   function prefetchSpeech(text) {
@@ -533,6 +671,19 @@ export function createVoiceController() {
       }
     }
 
+    // A context that was unlocked by a tap can drop out of "running" when the microphone opens or
+    // closes on iOS. Resume it before choosing the path: the whole-file fallback below is also an
+    // un-tapped play, which iOS may block (seen on an iPhone: first reply took 10 s).
+    if (playbackContext && playbackContext.state !== "running" && playbackContext.state !== "closed") {
+      const before = playbackContext.state;
+      await Promise.race([playbackContext.resume().catch(() => {}), new Promise(resolve => window.setTimeout(resolve, 500))]);
+      if (requestId !== speechRequestId) return;
+      callbacks.onTiming?.({ stage: playbackContext.state === "running" ? "playback-resumed" : "playback-not-running",
+        latencyMs: 0, reason: before === "interrupted" || before === "suspended" ? before : "other" });
+    } else if (!playbackContext) {
+      callbacks.onTiming?.({ stage: "playback-not-running", latencyMs: 0, reason: "no-context" });
+    }
+
     if (playbackContext?.state === "running") {
       try {
         await playStreamedSpeech(text, callbacks, requestId);
@@ -589,7 +740,7 @@ export function createVoiceController() {
       });
       if (!response.ok || !response.headers.get("content-type")?.includes("audio/pcm")) throw new Error("PCM stream unavailable");
       if (requestId !== speechRequestId) { await response.body?.cancel(); return; }
-      const player = createPcmPlayer(playbackContext, {
+      const player = createPcmPlayer(playbackContext, { destination: playbackOutput(),
         onStart: () => {
           if (requestId !== speechRequestId) return;
           callbacks.onTiming?.({ stage: "tts-cloud-stream", latencyMs: 0 });
@@ -672,6 +823,7 @@ export function createVoiceController() {
     speak,
     prefetchSpeech,
     stopSpeaking,
+    speakSentences,
     watchForBargeIn
   };
 }

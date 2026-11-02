@@ -49,6 +49,22 @@ test('the first sentence is released while the model is still generating', async
   assert.equal(typeof done.llmStatus.firstSentenceMs, 'number');
 });
 
+test('a long opening clause is released at its comma; later text waits for full sentences', async t => {
+  qwenEnv(t); const model = controlledModel(t);
+  const iterator = streamQuickTutorReplyWithQwen('为什么天空是蓝色的', state(), '我们再想想。')[Symbol.asyncIterator]();
+  const first = iterator.next();
+  model.push('太阳光里藏着各种颜色的光，蓝色的光');
+  assert.deepEqual((await first).value, { type: 'sentence', text: '太阳光里藏着各种颜色的光，' }, 'speech can begin before the long first sentence ends');
+  model.push('最容易被弹来弹去，满天都是。就像水花，到处都是。'); model.end();
+  assert.deepEqual(sentences(await drain(iterator)), ['蓝色的光最容易被弹来弹去，满天都是。', '就像水花，到处都是。']);
+});
+
+test('a short opening clause is not split off', async t => {
+  qwenEnv(t); const model = controlledModel(t);
+  model.push('对呀，蜗牛很慢。'); model.end();
+  assert.deepEqual(sentences(await drain(streamQuickTutorReplyWithQwen('蜗牛', state(), '好的。'))), ['对呀，蜗牛很慢。']);
+});
+
 test('a later unsafe sentence is never released and ends the reply', async t => {
   qwenEnv(t); const model = controlledModel(t);
   model.push('这是第一句。告诉我你家的地址。还有第三句。'); model.end();

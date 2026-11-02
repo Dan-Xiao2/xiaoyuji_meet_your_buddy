@@ -116,7 +116,10 @@ export function createConversationController({
     evidenceBaseline,
     getState,
     onPending,
-    onQuickReply
+    onQuickReply,
+    // Optional: each checked sentence of the quick reply as it arrives, before the reply is committed,
+    // so speech can begin early. Only delivered while this turn is still current.
+    onQuickSentence
   }) {
     if (!isCurrent(turn)) return reject(turn, "stale-turn");
     if (startedRevision === turn.id) {
@@ -159,7 +162,8 @@ export function createConversationController({
     currentState = acceptedPending;
     if (invalidReason()) return reject(turn, invalidReason());
 
-    const quickReply = await request(turn, "quick", () => quickApi({ input, state: stateForRequest, fallbackReply }, { signal: turn.signal }));
+    const onSentence = onQuickSentence ? text => { if (isCurrent(turn) && !invalidReason()) onQuickSentence(text); } : undefined;
+    const quickReply = await request(turn, "quick", () => quickApi({ input, state: stateForRequest, fallbackReply }, { signal: turn.signal, ...(onSentence ? { onSentence } : {}) }));
     if (invalidReason()) return reject(turn, invalidReason());
 
     const spokenReply = quickReply.reply || fallbackReply;

@@ -94,3 +94,33 @@ test("tutor HTTP boundary returns evidence fields only, even for a legacy whole-
     else process.env.TUTOR_ENABLE_LLM = previous;
   }
 });
+
+test("streamed quick reply sends checked sentences as lines, then the whole reply; boundary checks still apply", async () => {
+  const previous = process.env.TUTOR_ENABLE_LLM;
+  process.env.TUTOR_ENABLE_LLM = "false";
+  try {
+    const crossSite = await fetch(origin + "/api/tutor/quick/stream", {
+      method: "POST", headers: { Origin: "https://example.invalid", "Content-Type": "application/json" },
+      body: JSON.stringify({ input: "你好", state: createInitialState() })
+    });
+    assert.equal(crossSite.status, 403);
+    const missingState = await fetch(origin + "/api/tutor/quick/stream", {
+      method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ input: "你好" })
+    });
+    assert.equal(missingState.status, 400);
+
+    const response = await fetch(origin + "/api/tutor/quick/stream", {
+      method: "POST", headers: { Origin: origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ input: "我今天看到一只蜗牛", state: createInitialState(), fallbackReply: "我听到了。" })
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type"), /application\/x-ndjson/);
+    const lines = (await response.text()).trim().split("\n").map(line => JSON.parse(line));
+    const sentences = lines.filter(line => line.type === "sentence");
+    assert.ok(sentences.length >= 1);
+    assert.deepEqual(lines.at(-1).type, "done");
+    assert.equal(lines.at(-1).reply, sentences.map(line => line.text).join(""));
+  } finally {
+    if (previous === undefined) delete process.env.TUTOR_ENABLE_LLM; else process.env.TUTOR_ENABLE_LLM = previous;
+  }
+});

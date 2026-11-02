@@ -70,7 +70,7 @@ test('quick spoken reply cannot bypass the existing deterministic safety redirec
 });
 test('live-model metadata retains model name, latency and token usage for benchmarks',async()=>{
   const originalFetch=globalThis.fetch;
-  const overrides={QWEN_API_KEY:'test-only',LLM_PROVIDER:'qwen',TUTOR_ENABLE_LLM:'true',QWEN_MODEL:'benchmark-model'};
+  const overrides={QWEN_API_KEY:'test-only',LLM_PROVIDER:'qwen',TUTOR_ENABLE_LLM:'true',QWEN_QUICK_MODEL:'benchmark-model'};
   const saved=Object.fromEntries(Object.keys(overrides).map(key=>[key,process.env[key]]));
   Object.assign(process.env,overrides);
   try {

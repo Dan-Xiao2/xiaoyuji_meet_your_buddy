@@ -6,7 +6,7 @@ const CODE = /^[a-z0-9-]{1,40}$/;
 // Fallbacks, and the "did not hear the child" cases: capture errors, no speech, nothing recognised,
 // and interruptions that heard nothing (likely false triggers).
 const FAILURE_STAGES = new Set(["asr-realtime-fallback", "tts-stream-fallback", "tts-cloud-failed", "tts-cloud-mp3",
-  "capture-error", "capture-idle", "capture-empty", "barge-in-empty"]);
+  "capture-error", "capture-idle", "capture-empty", "barge-in-empty", "playback-not-running"]);
 
 function percentile(sorted, p) {
   if (!sorted.length) return null;
@@ -51,7 +51,9 @@ export function createPilotLog({ storage = null, now = () => Date.now(), maxEntr
       // Recognition connects when the child STARTS speaking, before the end-point, so a turn cannot
       // begin at the end-point. A new turn opens once the previous reply has started playing, or
       // at a second end-point within one turn (a reply that never played, e.g. speech disabled).
-      if (turn === 0 || inTurn("response-start") || (stage === "endpoint" && inTurn("endpoint"))) turn++;
+      // With sentence-by-sentence replies the whole-reply time ("quick-reply") arrives after speech
+      // has started; it still belongs to this turn.
+      if (turn === 0 || (inTurn("response-start") && stage !== "quick-reply") || (stage === "endpoint" && inTurn("endpoint"))) turn++;
       const entry = { turn, stage, latencyMs: Math.round(Number(latencyMs)), at: now() };
       if (Number(serverLatencyMs) > 0) entry.serverLatencyMs = Math.round(Number(serverLatencyMs));
       if (CODE.test(reason)) entry.reason = reason;

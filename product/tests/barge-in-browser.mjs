@@ -17,8 +17,10 @@ try {
   await page.addInitScript(initial => {
     localStorage.setItem("xiaoyuji-learning-state-v1", JSON.stringify(initial));
     window.micOpens = 0; window.micSpeaking = false; window.recognitionStarts = 0;
-    navigator.mediaDevices.getUserMedia = async () => {
+    window.micConstraints = [];
+    navigator.mediaDevices.getUserMedia = async constraints => {
       window.micOpens++;
+      window.micConstraints.push(constraints.audio);
       const audio = new AudioContext(); await audio.resume();
       const tone = audio.createOscillator(), gain = audio.createGain(), out = audio.createMediaStreamDestination();
       tone.frequency.value = 220; tone.connect(gain).connect(out); tone.start();
@@ -76,6 +78,14 @@ try {
   await page.evaluate(() => { window.micSpeaking = false; });
   const pilot = await page.evaluate(() => JSON.parse(sessionStorage.getItem("xiaoyuji-pilot-log-v1") || "[]"));
   assert.ok(pilot.some(entry => entry.stage === "barge-in" && entry.latencyMs >= 500), "the interruption is measured");
+  // While Xiaoyu streams speech the barge-in microphone has no echo cancellation (no call audio on
+  // iPhone); listening afterwards uses normal processing again.
+  const constraints = await page.evaluate(() => window.micConstraints);
+  const monitor = constraints.findLastIndex(audio => audio?.echoCancellation === false);
+  assert.ok(monitor >= 0, "the barge-in microphone avoids call audio");
+  const afterwards = constraints.slice(monitor + 1);
+  assert.ok(afterwards.length > 0 && afterwards.every(audio => audio === true || audio.echoCancellation !== false),
+    "listening after the interruption uses normal (default) processing");
 
   // Switch off: the same speech over the next reply neither interrupts nor opens a microphone.
   await page.evaluate(() => { const toggle = document.querySelector("[data-barge-in]"); toggle.checked = false; toggle.dispatchEvent(new Event("change")); });

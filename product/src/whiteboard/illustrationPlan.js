@@ -6,7 +6,7 @@ import { drawingConstraints, preservesDrawingObjects, unsupportedAssetDetail } f
 
 export const drawingSubjects = drawingKinds;
 export const drawingCapability = "小宇有白板：可组合" + Object.entries(drawingKinds).filter(([kind]) => kind !== "path").map(([, label]) => label).join("、") + "，连接两座房子的小路；可修改指定对象的颜色、大小、左右位置、复制、放在同层对象左或右边、删除和撤销。汽车颜色只改车身，小兔颜色只改身体，保留其他细节。房子可改拱门/方门及门色，设置0到4扇圆形/方形窗户及统一窗色；不能单独改某一扇窗或任意部件。明确指令由受约束的画布执行，不要说完全不会画画；不支持的对象或细节不能声称已画好。";
-export const conversationPrinciple = "跟随本轮话题，短追问沿用最近真正讨论的对象；不确定代词指什么时只问一句澄清。历史兴趣、知识卡和旧练习不能替用户换话题；不要主动从太阳转到积木、数数或故事。离屏建议必须与正在讨论的内容有关，不必每轮安排活动。允许只回应不提问；不要每轮要求选颜色、选选项或说明理由。用户已回答、拒绝或换话题时，不重复追问旧问题。自然平和，不用夸张赞美和固定开场白填充回答。";
+export const conversationPrinciple = "跟随本轮话题，短追问沿用最近真正讨论的对象；不确定代词指什么时只问一句澄清。历史兴趣、知识卡和旧练习不能替用户换话题；不要主动从太阳转到积木、数数或故事。离屏建议必须与正在讨论的内容有关，不必每轮安排活动。不考问、不连续追问；不要每轮要求选颜色、选选项或说明理由。用户已回答、拒绝或换话题时，不重复追问旧问题。自然平和，不用夸张赞美和固定开场白填充回答。";
 export const drawingExecutionRule = "普通聊天回复不会执行画布操作。没有通过画布规划器执行时，不得声称已经画好、改好、放大、涂色或让用户看一个不存在的图；也不要自行提议修改尚未支持的门窗等部件。";
 const aliases = drawingAliases;
 const numbers = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };

@@ -29,12 +29,36 @@ test("detector does not trigger on short sounds or speech broken by real pauses"
   assert.equal(feed(detector, [...clap, ...broken]).some(item => item.triggered), false);
 });
 
+// Without echo cancellation Xiaoyu leaks into the microphone at a fixed share of what is playing.
+const feedWithPlayback = (detector, frames, start = 0, step = 20) => frames.map(([mic, out], index) => detector.update(mic, start + index * step, out));
+
+test("with a playback reference, leaked speech that gets louder after warm-up does not trigger", () => {
+  // Xiaoyu starts softly, then speaks louder; the microphone hears 40 % of the output.
+  const speech = Array.from({ length: 150 }, (_, i) => { const out = i < 30 ? 0.05 : 0.05 + 0.25 * Math.abs(Math.sin(i / 7)); return [out * 0.4, out]; });
+  assert.equal(feedWithPlayback(createBargeInDetector({ warmupMs: 500, minSpeechMs: 300 }), speech).some(item => item.triggered), false);
+  // Without the reference (warm-up leak only), the same leak is mistaken for the child.
+  const unreferenced = createBargeInDetector({ warmupMs: 500, minSpeechMs: 300 });
+  assert.equal(speech.some(([mic], index) => unreferenced.update(mic, index * 20).triggered), true);
+});
+
+test("with a playback reference, a child speaking over Xiaoyu or in a pause triggers", () => {
+  const over = createBargeInDetector({ warmupMs: 500, minSpeechMs: 300 });
+  const warm = Array.from({ length: 25 }, () => [0.04, 0.1]);
+  const child = Array.from({ length: 20 }, () => [0.04 + 0.2, 0.1]);
+  assert.equal(feedWithPlayback(over, [...warm, ...child]).filter(item => item.triggered).length, 1);
+
+  const gap = createBargeInDetector({ warmupMs: 500, minSpeechMs: 300 });
+  const pause = Array.from({ length: 30 }, () => [0.002, 0]); // between sentences: nothing playing
+  const quietChild = Array.from({ length: 20 }, () => [0.06, 0]);
+  assert.equal(feedWithPlayback(gap, [...warm, ...pause, ...quietChild]).some(item => item.triggered), true);
+});
+
 function fakeAudio(levels) {
   const contexts = [];
   class AudioContextClass {
     constructor() { this.state = "running"; this.closed = false; contexts.push(this); }
     createAnalyser() { return { fftSize: 4, getFloatTimeDomainData: samples => samples.fill(levels.shift() ?? 0) }; }
-    createMediaStreamSource() { return { connect() {} }; }
+    createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
     close() { this.closed = true; this.state = "closed"; return Promise.resolve(); }
   }
   const stream = () => { const track = { stopped: false, stop() { this.stopped = true; } }; return { track, getTracks: () => [track] }; };
@@ -58,6 +82,17 @@ test("monitor hands the open stream over on a trigger, and releases it when stop
     onTrigger: () => assert.fail("must not trigger"), now: () => 0, requestFrame: () => 1, cancelFrame() {} });
   await stopped.ready; stopped.stop();
   assert.equal(idleStream.track.stopped, true);
+});
+
+test("a shared page context is used but never closed, so playback keeps working", async () => {
+  const audio = fakeAudio([]), stream = audio.stream();
+  const shared = new audio.AudioContextClass();
+  const monitor = startBargeInMonitor({ openStream: async () => stream, AudioContextClass: audio.AudioContextClass, context: shared,
+    onTrigger: () => assert.fail("must not trigger"), now: () => 0, requestFrame: () => 1, cancelFrame() {} });
+  await monitor.ready; monitor.stop();
+  assert.equal(audio.contexts.length, 1, "no private context was created");
+  assert.equal(shared.closed, false);
+  assert.equal(stream.track.stopped, true);
 });
 
 test("monitor stopped before the microphone opens releases the late stream and never runs", async () => {

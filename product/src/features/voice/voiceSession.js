@@ -1,3 +1,5 @@
+import { joinUtterance, looksUnfinished } from "./utteranceCompletion.js";
+
 // Owns the legacy half-duplex media lifecycle, without DOM or archive access.
 export function createVoiceSession({ voice, getContext, ui, narration, onInput, onTiming, onLevel, trace = () => {}, onChange = () => {}, onBargeIn = () => {},
   clock = { now: () => performance.now(), setTimeout: (fn, delay) => setTimeout(fn, delay), clearTimeout: id => clearTimeout(id) }
@@ -8,6 +10,9 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
   let failure = null, readyDetail = "";
   // Barge-in: while a reply plays, a speaking child stops it and is listened to (context.bargeIn).
   let bargeWatch = null, playStartedAt = null;
+  // A transcript that stopped mid-thought, waiting for the rest (at most MAX_HOLDS times per turn).
+  let heldText = "", holds = 0;
+  const MAX_HOLDS = 2, CONTINUE_WAIT_MS = 4000;
 
   const emit = (type, details = {}) => trace(type, {
     sessionId: getContext().sessionId, captureRevision, playbackRevision, ...details
@@ -61,6 +66,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
   }
 
   function pause({ detail = "点一下小宇，继续聊" } = {}) {
+    heldText = ""; holds = 0;
     suspendAutoListen();
     prepareTurn();
     turnStartedAt = null;
@@ -93,7 +99,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     onChange();
   }
 
-  function beginInput({ automated = false, afterBargeIn = false } = {}) {
+  function beginInput({ automated = false, afterBargeIn = false, continuing = false } = {}) {
     const context = { ...getContext() };
     const blocked = listenBlock(context, automated);
     if (blocked) { emit("media.listen-skipped", { reason: blocked }); return; }
@@ -117,10 +123,13 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       preferRecorder: Boolean(context.cloudTranscription && voice.recordingSupported),
       preferRealtime: Boolean(context.realtimeTranscription),
       asrCorpus: context.asrCorpus || "",
+      // While waiting for the rest of a held sentence, give up after a short silence.
+      ...(continuing ? { noSpeechTimeoutMs: CONTINUE_WAIT_MS } : {}),
       onStart: (details = {}) => {
         if (!live(true)) return;
         if (input !== "capturing") { voice.finishListening(); return; }
         ui.captureStart(details);
+        if (continuing) ui.transcript("我在听，你接着说。");
       },
       onLevel: level => { if (live() && input === "capturing") onLevel(level); },
       onTiming: timing => { if (live()) onTiming(timing); },
@@ -144,6 +153,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       },
       onIdle: () => {
         if (!live(true)) return;
+        if (heldText) { release(revision); return; }
         onTiming({ stage: "capture-idle", latencyMs: 0 });
         if (afterBargeIn) onTiming({ stage: "barge-in-empty", latencyMs: 0 });
         pause({ detail: "我先等一等，点我继续聊" });
@@ -156,13 +166,55 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
         input = "idle";
         onChange();
         if (!text) {
+          if (heldText) { release(revision); return; }
           onTiming({ stage: "capture-empty", latencyMs: 0 });
           if (afterBargeIn) onTiming({ stage: "barge-in-empty", latencyMs: 0 });
           pause(); return;
         }
-        onInput(text, { captureRevision: revision });
+        const said = joinUtterance(heldText, text);
+        if (looksUnfinished(said) && holds < MAX_HOLDS) {
+          heldText = said; holds++;
+          onTiming({ stage: "utterance-held", latencyMs: 0 });
+          beginInput({ continuing: true });
+          return;
+        }
+        heldText = ""; holds = 0;
+        onInput(said, { captureRevision: revision });
       }
     });
+  }
+
+  // Starts speaking a reply whose sentences are still arriving (see voice.speakSentences). Returns
+  // { push(text), end(), attach(replyMessageId), cancel() }; all are ignored once this playback has
+  // been replaced or stopped. attach links the playback to the committed reply message.
+  function playStreamingReply({ enabled = true } = {}) {
+    let sink = null, ended = false;
+    const pending = [];
+    play({ enabled, stream: { start: (_, callbacks) => {
+      sink = voice.speakSentences(callbacks);
+      for (const text of pending.splice(0)) sink.push(text);
+      if (ended) sink.end();
+      return true;
+    } } });
+    const revision = playbackRevision;
+    const live = () => revision === playbackRevision;
+    return {
+      push(text) { if (!live() || ended) return; if (sink) sink.push(text); else pending.push(text); },
+      end() { if (!live() || ended) return; ended = true; sink?.end(); },
+      attach(id) { if (live()) replyMessageId = id; },
+      cancel() { if (live()) { stopOutput(); onChange(); } }
+    };
+  }
+
+  // The child said no more after a held fragment: answer what was said.
+  function release(revision) {
+    const said = heldText;
+    heldText = ""; holds = 0;
+    captureRevision++;
+    input = "idle";
+    turnStartedAt = clock.now();
+    onChange();
+    onInput(said, { captureRevision: revision });
   }
 
   function finishInput() {
@@ -173,7 +225,9 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     voice.finishListening();
   }
 
-  function play({ text, steps, enabled = true, replyMessageId: messageId = null, farewell = false }) {
+  // stream: optional replacement for voice.speak, used by playStreamingReply for a reply that is
+  // still arriving; everything else (timing, barge-in, auto-listen, failure) is shared.
+  function play({ text, steps, enabled = true, replyMessageId: messageId = null, farewell = false, stream = null }) {
     clearTimer();
     stopCapture();
     stopOutput();
@@ -187,7 +241,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       if (!valid && report) emit("media.callback-rejected", { ...playbackIdentity, reason: "stale-media" });
       return valid;
     };
-    const sequence = steps || (text ? [{ text }] : []);
+    const sequence = steps || (text || stream ? [{ text: text || "" }] : []);
     if (steps?.length > 1) narration.prepare();
     if (!enabled || !sequence.length) {
       emit("media.play-skipped", { ...playbackIdentity, reason: enabled ? "empty" : "muted" });
@@ -218,7 +272,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
         previousEnd = clock.now();
         next(index + 1);
       };
-      const started = voice.speak(sequence[index].text, {
+      const started = (stream ? stream.start : voice.speak)(sequence[index].text, {
         onTiming: timing => { if (live() && !settled) onTiming(timing); },
         onStart: () => {
           if (!live(true)) return;
@@ -233,7 +287,8 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
               onTiming({ stage: "barge-in", latencyMs: clock.now() - playStartedAt });
               emit("media.barge-in", playbackIdentity);
               // The child did not hear the rest of this reply; the next model turn must know that.
-              if (messageId) onBargeIn(messageId);
+              // Read at trigger time: a streamed reply is attached to its message only once committed.
+              if (replyMessageId) onBargeIn(replyMessageId);
               beginInput({ afterBargeIn: true });
             });
           }
@@ -268,6 +323,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
   return {
     beginInput, finishInput, prepareTurn, pause, schedule, resume, suspendAutoListen,
     playReply: options => play(options),
+    playStreamingReply,
     acknowledgeEnd: text => { suspendAutoListen(); play({ text, farewell: true }); },
     getSnapshot: () => Object.freeze({ sessionId: getContext().sessionId, input, output, autoListen,
       replyMessageId, captureRevision, playbackRevision, scheduled: timer !== null, failure, readyDetail })
