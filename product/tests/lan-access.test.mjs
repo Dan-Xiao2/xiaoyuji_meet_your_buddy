@@ -5,10 +5,12 @@ import { accessCode, lanAddress } from '../scripts/run-pilot-lan.mjs';
 
 const request = (address, cookie) => ({ socket: { remoteAddress: address }, headers: cookie ? { cookie } : {} });
 
-test('loopback is always allowed; a LAN client needs a paired session cookie that does not contain the code', () => {
+test('every client, including loopback proxies, needs a paired session cookie that does not contain the code', () => {
   const access = createLanAccess({ code: 'ABCD2345' });
-  assert.equal(access.authorized(request('127.0.0.1')), true);
-  assert.equal(access.authorized(request('::ffff:127.0.0.1')), true);
+  for (const address of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+    assert.equal(access.authorized(request(address)), false);
+    assert.equal(access.authorized(request(address, 'xiaoyu_lan=forged')), false);
+  }
   assert.equal(access.authorized(request('192.168.1.20')), false);
   assert.equal(access.authorized(request('192.168.1.20', 'xiaoyu_lan=forged')), false);
   const paired = access.pair(' ABCD2345 ');
@@ -16,7 +18,9 @@ test('loopback is always allowed; a LAN client needs a paired session cookie tha
   assert.match(paired.cookie, /HttpOnly; Secure; SameSite=Strict/);
   assert.equal(paired.cookie.includes('ABCD2345'), false);
   const session = paired.cookie.split(';')[0];
-  assert.equal(access.authorized(request('192.168.1.20', `other=1; ${session}`)), true);
+  for (const address of ['192.168.1.20', '127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+    assert.equal(access.authorized(request(address, `other=1; ${session}`)), true);
+  }
 });
 
 test('sessions expire and repeated wrong codes lock pairing, even for the right code', () => {
@@ -24,7 +28,9 @@ test('sessions expire and repeated wrong codes lock pairing, even for the right 
   const access = createLanAccess({ code: 'ABCD2345', now: () => clock, sessionMs: 1000, maxFailures: 3, lockMs: 5000 });
   const session = access.pair('ABCD2345').cookie.split(';')[0];
   clock = 1001;
-  assert.equal(access.authorized(request('192.168.1.20', session)), false);
+  for (const address of ['192.168.1.20', '127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+    assert.equal(access.authorized(request(address, session)), false);
+  }
   for (let i = 0; i < 3; i++) assert.equal(access.pair('WRONG123').reason, 'wrong-code');
   assert.equal(access.pair('ABCD2345').reason, 'locked');
   clock += 5000;

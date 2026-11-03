@@ -124,3 +124,9 @@ test("streamed quick reply sends checked sentences as lines, then the whole repl
     if (previous === undefined) delete process.env.TUTOR_ENABLE_LLM; else process.env.TUTOR_ENABLE_LLM = previous;
   }
 });
+
+// The opt-in pilot restriction must not disable the separate local laboratory.
+test("unpaired local development keeps lab status available", async () => {
+  const response = await fetch(origin + "/api/voice-lab/status");
+  assert.equal(response.status, 200);
+});

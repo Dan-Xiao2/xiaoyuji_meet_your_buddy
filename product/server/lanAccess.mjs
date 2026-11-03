@@ -1,17 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 // Opt-in access control for running the app on a home network (family pilot on a phone).
-// The server spends the provider key and handles children's speech, so any non-loopback client
-// must first pair with a short access code. The code is typed into a form (never put in a URL,
-// where it would stay in browser history); pairing gives an HttpOnly session cookie that does
-// not contain the code. Loopback clients (the developer's own browser and tests) are unaffected.
+// The server spends the provider key and handles children's speech, so every client
+// must first pair with a short access code when this mode is enabled. The code is typed into a
+// form (never put in a URL or browser history); pairing gives an HttpOnly session cookie that does
+// not contain the code. A loopback connection may be a proxy, so it is not a credential.
 const COOKIE = "xiaoyu_lan";
-const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const digest = value => createHash("sha256").update(String(value)).digest();
-
-export function isLoopback(request) {
-  return LOOPBACK.has(request.socket?.remoteAddress);
-}
 
 export function createLanAccess({ code, now = () => Date.now(), sessionMs = 12 * 3600_000, maxFailures = 8, lockMs = 10 * 60_000 } = {}) {
   if (typeof code !== "string" || code.length < 8) throw new Error("LAN access code must be at least 8 characters");
@@ -24,7 +19,6 @@ export function createLanAccess({ code, now = () => Date.now(), sessionMs = 12 *
     return cookie ? cookie.slice(COOKIE.length + 1) : null;
   };
   function authorized(request) {
-    if (isLoopback(request)) return true;
     const id = sessionFrom(request);
     const expires = id ? sessions.get(id) : undefined;
     if (!expires) return false;

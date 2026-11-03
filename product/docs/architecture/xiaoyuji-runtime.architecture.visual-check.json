@@ -6,9 +6,9 @@
   "status": "pass",
   "visualReview": "pending",
   "artifact": {
-    "path": "/Users/apple/Documents/Codex/2026-08-21/小宇记/product/docs/architecture/xiaoyuji-runtime.architecture.html",
-    "sha256": "e16329b64b6948c6eb546ee4ccbe3a9f0278aead2720c5df0dd70b25ef1de89e",
-    "bytes": 724828
+    "path": "/Users/apple/Documents/Codex/2026-10-27/referenced-chatgpt-conversation-this-is-an/work/pilot-access-boundary/product/docs/architecture/xiaoyuji-runtime.architecture.html",
+    "sha256": "63b5affe720978bda124a0b70069bc0ccab4efb19c211dc903140f178a5a7387",
+    "bytes": 724892
   },
   "state": {
     "detail": "read",

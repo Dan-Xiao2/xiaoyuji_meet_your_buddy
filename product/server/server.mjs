@@ -88,7 +88,7 @@ async function handleRequest(request, response) {
   }
 
   if (pathname.startsWith("/api/voice-lab/")) {
-    if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress)) throw new RequestError(403, "local-lab-only");
+    if (lanAccess || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress)) throw new RequestError(403, "local-lab-only");
     if (request.method === "GET" && pathname === "/api/voice-lab/status") return sendJson(response, 200, voiceLab.status());
     if (request.method !== "POST" || !["/api/voice-lab/start", "/api/voice-lab/stop"].includes(pathname)) throw new RequestError(404, "not-found");
     const body = await readJson(request, 2048);

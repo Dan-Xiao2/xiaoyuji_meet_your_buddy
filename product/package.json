@@ -14,7 +14,7 @@
     "check:dialogue": "node --test tests/dialogue-benchmark.test.mjs",
     "check:growth": "node --test tests/growth-period.test.mjs tests/student-schema.test.mjs tests/growth-turn-context.test.mjs",
     "check:safety": "node --test tests/child-safety.test.mjs",
-    "check:server": "node --test tests/server-boundary.test.mjs tests/lan-access.test.mjs",
+    "check:server": "node --test tests/server-boundary.test.mjs tests/lan-access.test.mjs tests/paired-server-boundary.test.mjs",
     "check:browser": "node --test tests/browser-runtime.test.mjs && node scripts/run-critical-browser-checks.mjs",
     "check:release": "npm run check && npm run check:browser",
     "eval:model": "node scripts/benchmark-real-model.mjs --live --allow-paid-api",
