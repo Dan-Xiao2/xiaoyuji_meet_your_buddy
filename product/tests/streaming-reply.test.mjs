@@ -207,3 +207,27 @@ test("a possible interruption that nobody follows with talking lets Xiaoyu carry
   assert.equal(h.timings.includes("capture-idle"), false, "not counted as missing the child");
   assert.equal(h.watches.length, 2, "listening for an interruption again");
 });
+
+test("the whole wait the child feels is recorded: the silence that ended their turn plus everything after", () => {
+  const timings = [];
+  let now = 0;
+  const listens = [], sinks = [];
+  const voice = { recordingSupported: true, preparePlayback() {}, stopListening() {}, stopSpeaking() {}, finishListening() {},
+    listen(callbacks) { listens.push(callbacks); }, speak() { return true; }, prefetchSpeech() {}, heardSoFar: () => null,
+    speakSentences(callbacks) { const sink = { callbacks, push() {}, end() {} }; sinks.push(sink); return sink; } };
+  const session = createVoiceSession({ voice, getContext: () => ({ sessionId: "one", active: true, canListen: true, pending: false }),
+    onInput() {}, onTiming: item => timings.push(item), onLevel() {},
+    ui: { beforeListen() {}, captureStart() {}, transcript() {}, captureError() {}, clearSpeechError() {}, speechError() {} },
+    narration: { stop() {}, prepare() {}, step() {}, replay() {} },
+    clock: { now: () => now, setTimeout: () => 1, clearTimeout() {} } });
+  session.beginInput();
+  listens[0].onTiming({ stage: "endpoint", latencyMs: 700 });
+  now = 1000; listens[0].onProcessing();
+  listens[0].onEnd("蜗牛为什么背着房子");
+  const reply = session.playStreamingReply();
+  reply.push("因为那是它的家。");
+  now = 3300; sinks[0].callbacks.onStart();
+  const stage = name => timings.find(item => item.stage === name)?.latencyMs;
+  assert.equal(stage("response-start"), 2300);
+  assert.equal(stage("speech-to-reply"), 3000, "700 ms of silence plus 2.3 s");
+});

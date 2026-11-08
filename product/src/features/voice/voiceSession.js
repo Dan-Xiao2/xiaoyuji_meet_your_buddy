@@ -7,7 +7,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
 }) {
   let input = "idle", output = "idle", autoListen = false;
   let captureRevision = 0, playbackRevision = 0, timer = null;
-  let replyMessageId = null, turnStartedAt = null;
+  let replyMessageId = null, turnStartedAt = null, endpointSilenceMs = 0;
   let failure = null, readyDetail = "";
   // Barge-in: while a reply plays, a speaking child stops it and is listened to (context.bargeIn).
   let bargeWatch = null, playStartedAt = null;
@@ -168,6 +168,8 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       preferRealtime: Boolean(context.realtimeTranscription),
       asrCorpus: context.asrCorpus || "",
       speakingText,
+      // A reply follows this turn: let the barge-in microphone open in the quiet before it.
+      warmBargeIn: Boolean(context.bargeIn) && !provisional,
       // While waiting for the rest of a held sentence, give up after a short silence.
       ...(continuing ? { noSpeechTimeoutMs: CONTINUE_WAIT_MS } : provisional ? { noSpeechTimeoutMs: TENTATIVE_WAIT_MS } : {}),
       onStart: (details = {}) => {
@@ -178,7 +180,11 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       },
       onLevel: level => { if (live() && input === "capturing") onLevel(level); },
       onHeard: () => { if (live() && provisional) confirmBargeIn(); },
-      onTiming: timing => { if (live()) onTiming(timing); },
+      onTiming: timing => {
+        if (!live()) return;
+        if (timing.stage === "endpoint") endpointSilenceMs = timing.latencyMs || 0;
+        onTiming(timing);
+      },
       onProcessing: () => {
         if (!live(true)) return;
         turnStartedAt = clock.now();
@@ -271,6 +277,7 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
     captureRevision++;
     input = "idle";
     turnStartedAt = clock.now();
+    endpointSilenceMs = 0; // the wait for more already ran; count from here
     onChange();
     onInput(said, { captureRevision: revision });
   }
@@ -361,6 +368,9 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
           if (steps && previousEnd !== null) {
             onTiming({ stage: "drawing-segment-gap", latencyMs: clock.now() - previousEnd });
           } else if (turnStartedAt !== null) {
+            // The whole wait the child feels: the silence that ended their turn plus everything after it
+            // ("response-start" alone starts after that silence; on 2026-11-08 it was misread as the total).
+            onTiming({ stage: "speech-to-reply", latencyMs: endpointSilenceMs + clock.now() - turnStartedAt });
             onTiming({ stage: "response-start", latencyMs: clock.now() - turnStartedAt });
             turnStartedAt = null;
           }

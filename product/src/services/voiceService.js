@@ -5,8 +5,11 @@ import { createRealtimeCapture } from "./realtimeAsr.js";
 import { getMicrophoneId, openMicrophone, microphoneError, inputKind, inputCount } from "./microphoneInput.js";
 import { createBargeInDetector, startBargeInMonitor } from "./bargeIn.js";
 
-// Silence that ends a turn, by the recogniser's hint: a clear question is answered sooner, a
-// sentence left hanging (…然后 / …因为) gets more time. No hint keeps the detector's 1.05 s.
+// Silence that ends a turn. With live recognition the usual wait is 0.7 s, because a sentence left
+// hanging (…然后 / …因为 / …，) is extended to 1.8 s by the recogniser's hint and a final that still
+// looks unfinished is held for the rest; a clear question is answered after 0.55 s. Without live
+// recognition there are no hints, so the longer 1.05 s stays.
+const REALTIME_SILENCE_MS = 700, PLAIN_SILENCE_MS = 1050;
 const ENDPOINT_SILENCE_MS = { complete: 550, unfinished: 1800 };
 
 export function createVoiceController() {
@@ -63,6 +66,7 @@ export function createVoiceController() {
     audioEvent("audio-device-change", { levels: { inputs: count } });
     echoMemory = null;
     headsetInUse = false;
+    dropWarmRaw();
     currentMonitor?.stop(); currentMonitor = null;
     if (outputBus && playbackContext) {
       const gain = outputBus.gain, now = playbackContext.currentTime;
@@ -85,6 +89,43 @@ export function createVoiceController() {
     return Boolean(pcmPlayer);
   }
   let handoffTimer = null;
+  // The raw barge-in microphone, opened as soon as the child's turn ends so the iPhone changes its
+  // audio mode in the quiet while the reply is prepared, not as Xiaoyu starts to speak (pilot,
+  // 2026-11-08: opening it at her first word made her voice jump faster and louder and stutter).
+  let warmRaw = null, warmRawTimer = null, warmGeneration = 0;
+  function dropWarmRaw() {
+    warmGeneration++; // an opening still in progress is closed when it arrives
+    window.clearTimeout(warmRawTimer);
+    warmRawTimer = null;
+    warmRaw?.getTracks().forEach((track) => track.stop());
+    warmRaw = null;
+  }
+  async function warmBargeInMicrophone(onTiming) {
+    if (headsetInUse || warmRaw?.getAudioTracks()[0]?.readyState === "live") return;
+    const startedAt = window.performance.now();
+    dropWarmRaw();
+    const generation = warmGeneration;
+    try {
+      const opened = await openMicrophone({ voiceProcessing: false });
+      if (generation !== warmGeneration) { opened.getTracks().forEach((track) => track.stop()); return; }
+      warmRaw = opened;
+      warmRawTimer = window.setTimeout(dropWarmRaw, 10000); // no reply came to use it
+      onTiming?.({ stage: "mic-warm", latencyMs: window.performance.now() - startedAt, reason: "opened" });
+    } catch { onTiming?.({ stage: "mic-warm", latencyMs: 0, reason: "failed" }); }
+  }
+  // Not dropped by stopListening (a reply's start calls it just before the barge-in watch takes this
+  // stream); dropped when the next listening opens, after 10 s unused, or when the page is hidden.
+  globalThis.document?.addEventListener?.("visibilitychange", () => { if (globalThis.document.hidden) dropWarmRaw(); });
+  function takeWarmRaw() {
+    warmGeneration++;
+    const next = warmRaw;
+    window.clearTimeout(warmRawTimer);
+    warmRawTimer = null;
+    warmRaw = null;
+    if (next?.getAudioTracks()[0]?.readyState === "live") return next;
+    next?.getTracks().forEach((track) => track.stop());
+    return null;
+  }
 
   function dropHandoff() {
     window.clearTimeout(handoffTimer);
@@ -129,13 +170,16 @@ export function createVoiceController() {
     // is re-measured every second as the canceller converges, at the 90th percentile and twice
     // over, which kept Xiaoyu from interrupting herself while still catching the child in ~0.3 s.
     const detector = createBargeInDetector(referenced ? { absolute: 0.004, gapMs: 150, ratio: 2, couplingPercentile: 0.9, retrackMs: 1000 } : { absolute: 0.035 });
+    let usedWarm = 0;
     const openStream = async () => {
-      const opened = await openMicrophone({ voiceProcessing: !referenced });
+      const warm = referenced ? takeWarmRaw() : null;
+      if (warm) usedWarm = 1; else if (!referenced) dropWarmRaw();
+      const opened = warm || await openMicrophone({ voiceProcessing: !referenced });
       await noteInput(opened); // a headset found here takes effect from the next reply
       return opened;
     };
     return currentMonitor = startBargeInMonitor({ openStream, AudioContextClass, detector,
-      onEnd: (stats, reason) => onEnd({ ...stats, echoCancellation: referenced ? 0 : 1, headset: headset ? 1 : 0, inputKind: input.kind, inputs: input.count }, reason),
+      onEnd: (stats, reason) => onEnd({ ...stats, echoCancellation: referenced ? 0 : 1, headset: headset ? 1 : 0, inputKind: input.kind, inputs: input.count, warmMic: usedWarm }, reason),
       ...(referenced ? { meter: echoCancellingMeter } : {}),
       context: sharedAudioContext(), playbackLevel: referenced ? playbackLevel : () => 0, onTrigger: (opened) => {
         dropHandoff();
@@ -236,7 +280,7 @@ export function createVoiceController() {
     } catch { /* Whole-response cloud audio remains available. */ }
   }
 
-  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRecorder = false, preferRealtime = false, asrCorpus = "", speakingText = "", noSpeechTimeoutMs }) {
+  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRecorder = false, preferRealtime = false, asrCorpus = "", speakingText = "", warmBargeIn = false, noSpeechTimeoutMs }) {
     stopListening();
     finishRequested = false;
     const requestId = listeningRequestId;
@@ -247,7 +291,7 @@ export function createVoiceController() {
     }
 
     if (preferRecorder && recordingSupported) {
-      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime, asrCorpus, speakingText, noSpeechTimeoutMs }, requestId);
+      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime, asrCorpus, speakingText, warmBargeIn, noSpeechTimeoutMs }, requestId);
       return;
     }
 
@@ -334,7 +378,7 @@ export function createVoiceController() {
     if (recorder && recorder.state !== "inactive") recorder.stop();
   }
 
-  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime = false, asrCorpus = "", speakingText = "", noSpeechTimeoutMs }, requestId) {
+  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime = false, asrCorpus = "", speakingText = "", warmBargeIn = false, noSpeechTimeoutMs }, requestId) {
     if (!secureEnough) {
       onError?.("浏览器要求在 localhost 或 HTTPS 页面里使用麦克风。请用本地预览地址打开。");
       return;
@@ -345,6 +389,8 @@ export function createVoiceController() {
       return;
     }
 
+    // The processed microphone for listening never runs alongside the raw one.
+    if (!speakingText) dropWarmRaw();
     try {
       const nextStream = takeHandoff() || await openMicrophone();
       await noteInput(nextStream);
@@ -369,7 +415,8 @@ export function createVoiceController() {
     const recordedChunks = [];
     let captureStartedAt = 0;
     let speechStartOffsetMs = 0;
-    const activity = createVoiceActivityDetector(noSpeechTimeoutMs ? { idleTimeoutMs: noSpeechTimeoutMs } : {});
+    const activity = createVoiceActivityDetector({ silenceDurationMs: preferRealtime ? REALTIME_SILENCE_MS : PLAIN_SILENCE_MS,
+      ...(noSpeechTimeoutMs ? { idleTimeoutMs: noSpeechTimeoutMs } : {}) });
     let speechDetected = false;
     let stopReason = "manual";
     const mimeType = pickMimeType();
@@ -390,7 +437,7 @@ export function createVoiceController() {
           onEndpoint: hint => {
             if (requestId !== listeningRequestId) return;
             activity.setSilenceMs(ENDPOINT_SILENCE_MS[hint]);
-            onTiming?.({ stage: "endpoint-hint", latencyMs: ENDPOINT_SILENCE_MS[hint] ?? 1050, reason: hint || "none" });
+            onTiming?.({ stage: "endpoint-hint", latencyMs: ENDPOINT_SILENCE_MS[hint] ?? REALTIME_SILENCE_MS, reason: hint || "none" });
           } });
         if (requestId !== listeningRequestId || finishRequested) {
           realtime.cancel();
@@ -400,6 +447,7 @@ export function createVoiceController() {
         realtimeCapture = realtime;
       } catch {
         if (requestId !== listeningRequestId) return;
+        activity.setSilenceMs(PLAIN_SILENCE_MS); // no live hints without live recognition
         onTiming?.({ stage: "asr-realtime-fallback", reason: "capture-unavailable", latencyMs: 0 });
       }
     }
@@ -431,6 +479,7 @@ export function createVoiceController() {
       // Release the microphone and change feedback as soon as recording ends, not after ASR.
       const realtimeResult = realtime?.finish();
       cleanupRecorderOnly();
+      if (warmBargeIn) void warmBargeInMicrophone(onTiming);
       onProcessing?.();
       onResult?.("小宇正在把声音转成文字...");
       if (realtimeResult) {
