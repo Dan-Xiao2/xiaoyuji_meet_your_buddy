@@ -21,7 +21,7 @@ import { renderMemoryArchive, renderMemoryDashboard } from "./ui/memoryPanel.js"
 import { mountArchiveControls } from "./ui/archiveControls.js";
 import { mountMicrophoneSettings } from "./ui/microphoneSettings.js";
 import { recognitionCorpus } from "./features/voice/recognitionCorpus.js";
-import { getBargeInEnabled, setBargeInEnabled, getRealtimeEnabled, setRealtimeEnabled } from "./services/microphoneInput.js";
+import { getBargeInEnabled, setBargeInEnabled, getRealtimeEnabled, setRealtimeEnabled, getCaptionsEnabled, setCaptionsEnabled } from "./services/microphoneInput.js";
 import { createPilotLog } from "./services/pilotLog.js";
 import { bindPilotLogPanel } from "./ui/pilotLogPanel.js";
 import { REVISION_KEY } from "./services/localPersistence.js";
@@ -115,6 +115,8 @@ const dom = {
   voiceStatus: document.querySelector("#voiceStatus"),
   voiceTranscript: document.querySelector("#voiceTranscript"),
   voiceSupportText: document.querySelector("#voiceSupportText"),
+  voiceNotice: document.querySelector("#voiceNotice"),
+  voiceCaptions: document.querySelector("#voiceCaptions"),
   voiceDiagnostic: document.querySelector("#voiceDiagnostic"),
   speakReplies: document.querySelector("#speakReplies"),
   connectionStatus: document.querySelector("#connectionStatus"),
@@ -210,15 +212,44 @@ if (realtimeToggle) {
   realtimeToggle.addEventListener("change", () => setRealtimeEnabled(realtimeToggle.checked));
 }
 const bargeInToggle = document.querySelector("[data-barge-in]");
-// Replies the child spoke over. The next request marks them, so the model does not assume the child
-// heard (or accepted) the rest. Marked only in the next request's history, never on the reply that
-// is still the current turn's target, so in-flight commits are not disturbed.
 // Replies the child cut short, by message id: { heard } is the whole sentences actually played
-// (streamed replies), absent when that is unknown.
+// (streamed replies), absent when that is unknown. The next request marks them, so the model does
+// not assume the child heard (or accepted) the rest. Marked only in the next request's history,
+// never on the reply that is still the current turn's target, so in-flight commits are not disturbed.
 const interruptedReplies = new Map();
 if (bargeInToggle) {
   bargeInToggle.checked = getBargeInEnabled();
   bargeInToggle.addEventListener("change", () => setBargeInEnabled(bargeInToggle.checked));
+}
+const captionsToggle = document.querySelector("[data-captions]");
+if (captionsToggle) {
+  captionsToggle.checked = getCaptionsEnabled();
+  captionsToggle.addEventListener("change", () => { setCaptionsEnabled(captionsToggle.checked); renderVoiceCaptions(); });
+}
+// Shown on the chat screen for the adult: a listening failure stays readable until the next try
+// (it used to be only in screen-reader text, so a parent saw "再试一次" without knowing why).
+function showVoiceNotice(message = "") {
+  dom.voiceNotice.replaceChildren();
+  if (message) {
+    // An icon as well as the colour (DESIGN.md: errors are never shown by colour alone).
+    const icon = document.createElement("i");
+    icon.dataset.lucide = "circle-alert"; icon.setAttribute("aria-hidden", "true");
+    const text = document.createElement("span");
+    text.textContent = message;
+    dom.voiceNotice.append(icon, text);
+    window.lucide?.createIcons();
+  }
+  dom.voiceNotice.hidden = !message;
+}
+function renderVoiceCaptions() {
+  const last = role => [...state.messages].reverse().find(message => message.role === role)?.text || "";
+  const child = last("child"), tutor = last("tutor");
+  for (const [selector, text] of [["[data-caption-child]", child], ["[data-caption-tutor]", tutor]]) {
+    const line = dom.voiceCaptions.querySelector(selector);
+    line.textContent = text;
+    line.parentElement.hidden = !text;
+  }
+  dom.voiceCaptions.hidden = !captionsToggle?.checked || (!child && !tutor);
 }
 const pilotLog = (() => { try { return createPilotLog({ storage: window.sessionStorage }); } catch { return createPilotLog(); } })();
 bindPilotLogPanel(document.querySelector("#pilotSettings"), pilotLog, {
@@ -238,7 +269,7 @@ const voiceSession = createVoiceSession({
     get asrCorpus() { return recognitionCorpus(state.messages); }
   }),
   ui: {
-    beforeListen: () => microphoneSettings.reset(),
+    beforeListen: () => { microphoneSettings.reset(); showVoiceNotice(); },
     captureStart: (details) => {
       microphoneSettings.noteConversationInput(details.inputLabel);
       dom.voiceTranscript.textContent = details.mode === "recording" ? "说完会自动处理，也可以再点一下结束。" : "请慢慢说一句话。";
@@ -246,6 +277,7 @@ const voiceSession = createVoiceSession({
     transcript: text => { dom.voiceTranscript.textContent = text; },
     captureError: message => {
       dom.voiceTranscript.textContent = message;
+      showVoiceNotice(message);
     },
     clearSpeechError: () => { document.querySelector("#speechFailure").hidden = true; },
     speechError: replyMessageId => {
@@ -452,9 +484,11 @@ function syncProfileForm() {
 function render() {
   const conversationMoments = getStudentGrowthMoments(state.studentModel?.studentId);
   renderMessages(dom.messageList, state.messages);
+  renderVoiceCaptions();
   renderWhiteboard(dom.whiteboard, state.board);
   renderChildStageLayout();
-  renderMemoryDashboard(dom.memoryDashboard, state.memory, state.studentModel, state.activeLesson, conversationMoments, growthSelection);
+  renderMemoryDashboard(dom.memoryDashboard, state.memory, state.studentModel, state.activeLesson, conversationMoments, growthSelection,
+    { chatting: state.session?.status === "active" });
   renderMemoryArchive(dom.backupDashboard, conversationMoments, state.profile.name || "孩子");
   renderAdultSummary(dom.adultSummary, state);
   renderParentTimeline(dom.parentTimeline, state, conversationMoments.filter((item) => item.reviewEligible !== false));
@@ -560,13 +594,15 @@ function renderSessionFlow() {
   dom.startConsent.disabled = active;
   dom.endParentSession.hidden = !active;
   dom.startChildSession.textContent = active ? "回到聊天" : "开始聊天";
+  // "先认识一下孩子" only before the first setup; during a chat the panel is about the chat.
+  document.querySelector("#parentSessionTitle").textContent = active ? "正在聊天" : state.profile.configured ? "开始聊天" : "先认识一下孩子";
   dom.parentSessionPanel.dataset.profileStatus = state.profile.configured ? "configured" : "new";
-  dom.parentSessionPanel.hidden = state.profile.configured && !active && state.profile.consent;
+  dom.parentSessionPanel.hidden = state.profile.configured && !active;
   dom.parentMore.hidden = !state.profile.configured;
 
   if (active) {
     dom.parentSessionPanel.dataset.sessionStatus = "active";
-    dom.sessionFormStatus.textContent = `已经聊了 ${state.session.turnCount || 0} 轮，可以随时结束。`;
+    dom.sessionFormStatus.textContent = `已聊 ${state.session.turnCount || 0} 轮`;
     return;
   }
 
@@ -585,6 +621,7 @@ function renderSessionFlow() {
       <div class="app-home-instruction">
         <strong>${homeDetail}</strong>
       </div>
+      ${state.profile.configured ? "" : `<button class="primary-button app-home-setup" type="button" data-session-action="show-parent">去设置</button>`}
     </div>
   `;
 }
@@ -1138,7 +1175,9 @@ function startSessionFromParent() {
     dom.startChildName.focus();
     return;
   }
-  if (!consent) {
+  // Only the first setup needs the guardian's consent (docs/product-framework.md). Switching saving
+  // off later in the profile keeps chatting possible; nothing new is then saved (applicationPersistence).
+  if (!consent && !state.profile.configured) {
     dom.sessionFormStatus.textContent = "需要家长同意后，才能在本机保存成长记录。";
     dom.startConsent.focus();
     return;
@@ -1159,7 +1198,7 @@ function startSessionFromParent() {
 }
 
 function startSessionFromMobileHome() {
-  if (!state.profile.configured || !state.profile.consent) {
+  if (!state.profile.configured) {
     showParentSetup("第一次使用，请大人先完成简单设置。");
     return;
   }
@@ -1462,7 +1501,7 @@ for (const dashboard of [dom.memoryDashboard, dom.backupDashboard]) {
 
 function refreshGrowthDashboard(focusSelector) {
   renderMemoryDashboard(dom.memoryDashboard, state.memory, state.studentModel, state.activeLesson,
-    getStudentGrowthMoments(state.studentModel?.studentId), growthSelection);
+    getStudentGrowthMoments(state.studentModel?.studentId), growthSelection, { chatting: state.session?.status === "active" });
   window.lucide?.createIcons();
   dom.memoryDashboard.querySelector(focusSelector)?.focus({ preventScroll: true });
 }

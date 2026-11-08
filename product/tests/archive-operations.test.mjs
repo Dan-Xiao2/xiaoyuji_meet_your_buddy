@@ -236,4 +236,7 @@ test('archive escapes user text and excluded moments disappear from the growth p
   renderMemoryDashboard(container, {}, state.studentModel, null, db.growthMoments);
   assert.ok(container.innerHTML.includes('还没有成长记录'));
   assert.ok(!container.innerHTML.includes('公园'));
+  assert.ok(container.innerHTML.includes('>开始聊天<'));
+  renderMemoryDashboard(container, {}, state.studentModel, null, db.growthMoments, {}, { chatting: true });
+  assert.ok(container.innerHTML.includes('>回到聊天<'), 'during a chat the empty page offers to go back to it');
 });

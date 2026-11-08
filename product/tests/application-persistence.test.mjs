@@ -77,3 +77,15 @@ for (const [method, args, failure] of [
     assert.equal(failures.length, 1);
   });
 }
+
+test("with saving switched off the family can chat, but nothing new enters the growth archive", () => {
+  const { persistence, calls } = setup();
+  const off = { ...state, profile: { consent: false } };
+  assert.equal(persistence.saveTurn(off, { moment: { childQuote: "test quote" }, events: [["test", "one"]] }).ok, true);
+  assert.equal(persistence.saveObservation(off, "task", { completion: "completed" }).ok, true);
+  assert.equal(persistence.finishSession(off).ok, true);
+  assert.equal(persistence.startSession(off).ok, true);
+  assert.deepEqual(calls.map(call => call.name), ["persistStudentModel"], "only the profile itself is saved");
+  persistence.saveTurn({ ...state, profile: { consent: true } }, { moment: { childQuote: "test quote" }, events: [] });
+  assert.ok(calls.some(call => call.name === "recordGrowthMoment"), "switched on, moments are saved again");
+});

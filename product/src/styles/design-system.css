@@ -222,3 +222,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .archive-recovery button { min-height: 48px; max-width: 100%; white-space: normal; }
 .archive-recovery form { border-top: 1px solid var(--line); padding-top: 16px; }
 .archive-recovery form label { display: block; margin-bottom: 16px; }
+
+/* Adult-facing text on the chat screen: a listening failure, and optional captions. */
+.voice-notice { max-width: 30rem; margin: 16px auto 0; padding: 10px 14px; border-radius: var(--xy-radius); background: #fdf0ef; color: var(--xy-error); font-size: var(--xy-caption); line-height: 1.5; display: flex; gap: 8px; align-items: flex-start; }
+.voice-notice:not([hidden]) svg { flex: none; width: 20px; height: 20px; margin-top: 1px; }
+.voice-captions { width: min(100%, 34rem); margin: 16px auto 0; display: grid; gap: 6px; color: var(--xy-muted); font-size: var(--xy-caption); line-height: 1.5; }
+/* No "heard"/"Xiaoyu" labels: the child's words are quieter and set in, Xiaoyu's answer is full ink. */
+.voice-captions p { margin: 0; }
+.voice-caption-child { padding-left: 12px; border-left: 2px solid var(--xy-line); }
+.voice-caption-tutor { color: var(--xy-ink); }
+.voice-captions p[hidden] { display: none; }
+.child-stage[data-layout=whiteboard] .voice-captions, .child-stage[data-layout=whiteboard] .voice-notice { margin-left: 0; max-width: 22rem; text-align: left; }
+/* First run: the picture alone did not look tappable, so the way to setup is a plain button too. */
+.app-home-setup { min-width: 10rem; }
+.profile-hint { margin: -4px 0 0; color: var(--xy-muted); font-size: var(--xy-caption); line-height: 1.5; }
+/* Family settings: device checks and pilot data at the bottom, under their own heading. */
+.device-settings { order: 4; display: grid; gap: 0; }
+.device-settings-title { margin: 0 0 8px; font-size: var(--xy-section); line-height: 1.4; }
+.parent-session-panel:not([hidden]) { display: grid; gap: 16px; }
+@media (max-width: 900px) {
+  /* The drawer's picture is hidden, so the title takes the first column instead of a 48px one. */
+  .mobile-drawer-header { grid-template-columns: minmax(0, 1fr) 44px; }
+  .mobile-drawer-close { width: 44px; height: 44px; }
+}
+.download-format { white-space: nowrap; }

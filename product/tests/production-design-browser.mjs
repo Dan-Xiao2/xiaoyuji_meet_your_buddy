@@ -138,7 +138,7 @@ try {
   const page = await fresh.newPage();
   await page.route("**/api/**", route => route.fulfill({ contentType: "application/json", body: "{}" }));
   await page.goto(process.env.TEST_URL || "http://localhost:4173/");
-  await page.locator('[data-session-action="show-parent"]').click();
+  await page.getByRole("button", { name: "去设置" }).click(); // a plain button besides the picture
   assert.equal(await page.locator("#parentSessionPanel").isVisible(), true);
   assert.equal(await page.locator("#profileForm").isVisible(), false);
   await page.locator("#startChildSession").click();
@@ -149,4 +149,25 @@ try {
   await page.screenshot({ path: "screenshots/production-design/390-first-setup.png", fullPage: true });
   await fresh.close();
   console.log("PASS first-use setup and guardian consent remain required");
+
+  // Saving switched off later: chatting still starts from the home screen, and no moment is saved.
+  const off = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const offPage = await off.newPage();
+  await offPage.route("**/api/**", route => route.fulfill({ contentType: "application/json", body: "{}" }));
+  const offState = createInitialState(); offState.uiVersion = 4;
+  offState.profile = { ...offState.profile, name: "安安", configured: true, consent: false };
+  offState.family = createInitialFamily(offState.profile);
+  await offPage.addInitScript(saved => {
+    if (!localStorage.getItem("xiaoyuji-learning-state-v1")) localStorage.setItem("xiaoyuji-learning-state-v1", JSON.stringify(saved));
+    window.SpeechRecognition = undefined; window.webkitSpeechRecognition = undefined;
+  }, offState);
+  await offPage.goto(process.env.TEST_URL || "http://localhost:4173/");
+  await offPage.locator('[data-session-action="quick-start"]').click();
+  await offPage.locator("#childStage").waitFor({ state: "visible" });
+  const db = await offPage.evaluate(() => JSON.parse(localStorage.getItem("xiaoyuji-local-student-db-v1") || "{}"));
+  assert.ok(db.studentModels && Object.keys(db.studentModels).length === 1, "the profile itself was saved");
+  assert.equal((db.sessions || []).length, 0, "no session record while saving is off");
+  assert.equal((db.growthMoments || []).length, 0);
+  await off.close();
+  console.log("PASS saving switched off: chatting still starts, nothing new is saved");
 } finally { await browser.close(); }

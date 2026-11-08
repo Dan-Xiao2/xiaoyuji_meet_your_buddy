@@ -47,3 +47,18 @@ test("a headset microphone is recognised from its track label", async () => {
   for (const label of ["iPhone 麦克风", "iPhone Microphone", "Default", ""]) assert.equal(isHeadsetInput(stream(label)), false, label);
   assert.equal(isHeadsetInput(null), false);
 });
+
+test("adult captions are off unless turned on, and the choice stays on this device", async () => {
+  const { getCaptionsEnabled, setCaptionsEnabled } = await import("../src/services/microphoneInput.js");
+  const original = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const data = new Map();
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage: {
+    getItem: key => data.get(key), setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) } } });
+  try {
+    assert.equal(getCaptionsEnabled(), false);
+    setCaptionsEnabled(true); assert.equal(getCaptionsEnabled(), true);
+    setCaptionsEnabled(false); assert.equal(getCaptionsEnabled(), false);
+  } finally {
+    if (original) Object.defineProperty(globalThis, "window", original); else delete globalThis.window;
+  }
+});

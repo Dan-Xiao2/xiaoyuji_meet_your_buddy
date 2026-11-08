@@ -15,11 +15,12 @@ const domainGroups = {
   thinking: { label: "思考", color: "#e1bd54", domains: ["math"] }
 };
 
-export function renderMemoryDashboard(container, memory, studentModel, activeLesson, moments = [], selection = {}) {
+// chatting: a chat is in progress, so the empty page offers to go back to it rather than start one.
+export function renderMemoryDashboard(container, memory, studentModel, activeLesson, moments = [], selection = {}, { chatting = false } = {}) {
   const name = studentModel?.profile?.nickname || "孩子";
   const childMoments = moments.filter((item) => mayArchiveMoment(item) && isChildMoment(item) && item.reviewEligible !== false);
   if (!childMoments.length) {
-    container.innerHTML = renderEmptyMemory(name);
+    container.innerHTML = renderEmptyMemory(name, chatting);
     return;
   }
 
@@ -32,7 +33,7 @@ export function renderMemoryDashboard(container, memory, studentModel, activeLes
   const visible = bucket ? bucket.records : records.slice(-3);
 
   container.innerHTML = `
-    <header class="growth-app-header"><p>慢慢长大</p><h1>${escapeHtml(name)}的成长</h1></header>
+    <header class="growth-app-header"><h1>${escapeHtml(name)}的成长</h1></header>
     ${renderSelectedRange(period)}
     ${records.length ? `
       ${renderDiscovery(name, stage, records)}
@@ -117,13 +118,25 @@ function renderSelectedChart(period, selectedBucket) {
 
 export function renderMemoryArchive(container, moments = [], profileName = "孩子") {
   moments = moments.filter(mayArchiveMoment);
+  // No records: one quiet empty state, without a disabled toolbar or a "0 条珍藏" counter
+  // (docs/ui-motion-guidelines.md: modules without data are hidden).
+  if (!moments.length) {
+    container.innerHTML = `
+      <section class="conversation-archive is-empty" aria-labelledby="conversationArchiveTitle">
+        <h2 id="conversationArchiveTitle" class="sr-only">${escapeHtml(profileName)}的完整记录</h2>
+        <div class="moment-empty"><strong>还没有记录</strong><p>聊过之后，原话会保存在这台设备上。</p></div>
+        <p class="moment-action-status" id="momentActionStatus" aria-live="polite"></p>
+      </section>
+    `;
+    return;
+  }
   container.innerHTML = `
     <section class="conversation-archive" aria-labelledby="conversationArchiveTitle">
       <div class="backup-summary">
         <div>
           <p class="eyebrow">保存在这台设备</p>
           <h2 id="conversationArchiveTitle">${escapeHtml(profileName)}的完整记录</h2>
-          <p>${moments.length ? `共 ${moments.length} 条，可以选择珍藏或下载。` : "还没有可以备份的记录。"}</p>
+          <p>共 ${moments.length} 条</p>
         </div>
         <span>${moments.filter((item) => item.starred || item.saved).length}<small>条珍藏</small></span>
       </div>
@@ -134,10 +147,9 @@ export function renderMemoryArchive(container, moments = [], profileName = "孩�
   `;
 }
 
-function renderEmptyMemory(name) {
+function renderEmptyMemory(name, chatting = false) {
   return `
     <header class="growth-app-header">
-      <p>慢慢长大</p>
       <h1>${escapeHtml(name)}的成长</h1>
     </header>
     <section class="memory-empty-state" aria-labelledby="memoryEmptyTitle">
@@ -145,7 +157,7 @@ function renderEmptyMemory(name) {
       <div>
         <h2 id="memoryEmptyTitle">还没有成长记录</h2>
         <p>从一次聊天开始</p>
-        <button class="primary-button" type="button" data-memory-action="start-first">开始聊天</button>
+        <button class="primary-button" type="button" data-memory-action="start-first">${chatting ? "回到聊天" : "开始聊天"}</button>
       </div>
     </section>
   `;

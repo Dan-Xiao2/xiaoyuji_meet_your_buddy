@@ -1551,7 +1551,7 @@
 .session-form-status {
   grid-column: 1 / -1;
   min-height: 0;
-  margin: -6px 0 0;
+  margin: 4px 0 0;
   color: #527068;
   font-size: 13px;
   font-weight: 800;

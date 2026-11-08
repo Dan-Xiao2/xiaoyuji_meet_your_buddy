@@ -87,8 +87,15 @@ try {
   };
 
 
+  // Captions for the adult: off by default, then what Xiaoyu heard and answered.
+  assert.equal(await page.locator("#voiceCaptions").isHidden(), true, "no captions unless a parent turns them on");
+  await page.evaluate(() => { const toggle = document.querySelector("[data-captions]"); toggle.checked = true; toggle.dispatchEvent(new Event("change")); });
   await ask("虚构：蜗牛为什么慢");
   await page.waitForFunction(() => document.querySelector(".child-voice-dock").dataset.voicePhase === "speaking");
+  await page.waitForFunction(() => document.querySelector("[data-caption-tutor]").textContent.includes("蜗牛背着小房子"));
+  assert.equal(await page.locator("[data-caption-child]").textContent(), "虚构：蜗牛为什么慢");
+  assert.equal(await page.locator("#voiceCaptions").isVisible(), true);
+  assert.equal(await page.evaluate(() => localStorage.getItem("xiaoyuji-captions-v1")), "on");
   await page.waitForTimeout(1200); // a quiet room past the warm-up does not interrupt
   assert.equal(await phase(), "speaking", "silence does not interrupt Xiaoyu");
   // A loud sound only makes Xiaoyu quieter while listening starts; nothing recognised, she carries on.

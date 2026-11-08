@@ -21,6 +21,18 @@ export function setBargeInEnabled(enabled) {
   try { window.localStorage.setItem(BARGE_IN_KEY, enabled ? "on" : "off"); } catch { /* keep the in-page choice */ }
 }
 
+// Captions for the adult nearby: what Xiaoyu heard and answered, shown on the chat screen. Off by
+// default (the screen stays a single picture for the child). Device-local.
+export const CAPTIONS_KEY = "xiaoyuji-captions-v1";
+
+export function getCaptionsEnabled() {
+  try { return window.localStorage?.getItem(CAPTIONS_KEY) === "on"; } catch { return false; }
+}
+
+export function setCaptionsEnabled(enabled) {
+  try { window.localStorage.setItem(CAPTIONS_KEY, enabled ? "on" : "off"); } catch { /* keep the in-page choice */ }
+}
+
 // Realtime recognition streams audio while the child speaks (faster). A parent can turn it off to
 // recognise after speaking instead, e.g. when a device makes noise during realtime capture.
 export const REALTIME_KEY = "xiaoyuji-realtime-asr-v1";

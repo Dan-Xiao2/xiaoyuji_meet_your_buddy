@@ -77,6 +77,12 @@
                 <strong class="xiaoyu-talk-label" id="voicePromptTitle">开始聊天</strong>
               </button>
               <span class="sr-only" id="voicePromptDetail" aria-live="polite">说完松开</span>
+              <!-- For the adult nearby: why listening failed, and optional captions. Screen readers get the same text from #voiceTranscript and the message log. -->
+              <p class="voice-notice" id="voiceNotice" aria-hidden="true" hidden></p>
+              <div class="voice-captions" id="voiceCaptions" aria-hidden="true" hidden>
+                <p class="voice-caption-child"><span data-caption-child></span></p>
+                <p class="voice-caption-tutor"><span data-caption-tutor></span></p>
+              </div>
               <div class="sr-only" aria-live="polite">
                 <span id="voiceStatus">等待说话</span>
                 <span id="voiceTranscript"></span>
@@ -127,7 +133,7 @@
 
             <article class="parent-session-panel" id="parentSessionPanel" aria-live="polite">
               <div class="parent-session-copy">
-                <h2>先认识一下孩子</h2>
+                <h2 id="parentSessionTitle">先认识一下孩子</h2>
               </div>
               <div class="session-profile-fields">
                 <label>
@@ -155,12 +161,16 @@
               <p class="session-form-status" id="sessionFormStatus"></p>
             </article>
 
+            <!-- Device checks and pilot measurements, for testing; kept apart from the child's profile and records (AGENTS.md). -->
+            <section class="device-settings" aria-labelledby="deviceSettingsTitle">
+            <h2 class="device-settings-title" id="deviceSettingsTitle">设备与测试</h2>
             <details class="microphone-settings" id="microphoneSettings">
-              <summary>麦克风</summary>
+              <summary>麦克风与语音</summary>
               <div class="microphone-settings-body">
                 <label>聊天麦克风<select aria-label="聊天麦克风"><option value="">跟随系统</option></select></label>
                 <label class="checkbox-line"><input type="checkbox" role="switch" data-barge-in checked />小宇说话时可以开口打断</label>
                 <label class="checkbox-line"><input type="checkbox" role="switch" data-realtime-asr checked />实时识别（更快）</label>
+                <label class="checkbox-line"><input type="checkbox" role="switch" data-captions />显示字幕</label>
                 <button class="text-button" type="button" data-mic-refresh><i data-lucide="refresh-cw" aria-hidden="true"></i>允许并读取麦克风</button>
                 <p data-mic-actual></p>
                 <p data-mic-recent></p>
@@ -171,7 +181,7 @@
                   <button class="text-button" type="button" data-mic-clear hidden><i data-lucide="trash-2" aria-hidden="true"></i>清除录音</button>
                 </div>
                 <audio controls hidden aria-label="本机录音试听"></audio>
-                <p class="microphone-privacy">测试录音仅用于本机试听，不上传、不加入成长记录。</p>
+                <p class="microphone-privacy">只在本机试听，不上传。</p>
                 <p data-mic-status role="status"></p>
               </div>
             </details>
@@ -184,10 +194,11 @@
                   <button class="primary-button" type="button" data-pilot-export><i data-lucide="download" aria-hidden="true"></i>导出测试数据</button>
                   <button class="text-button" type="button" data-pilot-clear><i data-lucide="trash-2" aria-hidden="true"></i>清空</button>
                 </div>
-                <p class="microphone-privacy">只记录每轮各阶段耗时和失败原因，不含录音、文字或孩子的信息。</p>
+                <p class="microphone-privacy">只含耗时和失败代码，不含录音和文字。</p>
                 <p data-pilot-status role="status"></p>
               </div>
             </details>
+            </section>
 
             <details class="family-recap" id="familyRecap" hidden>
               <summary>本次陪伴</summary>
@@ -198,7 +209,6 @@
             <article class="offline-panel" id="offlinePanel" hidden>
               <div class="parent-section-heading">
                 <div>
-                  <p class="eyebrow">一起玩一会儿</p>
                   <h2>今天的亲子小任务</h2>
                 </div>
               </div>
@@ -208,7 +218,6 @@
             <section class="parent-recent" id="parentRecent" aria-labelledby="recentTitle" hidden>
               <div class="parent-section-heading">
                 <div>
-                  <p class="eyebrow">最近的小变化</p>
                   <h2 id="recentTitle">成长足迹</h2>
                 </div>
                 <button class="quiet-link" type="button" data-view-link="memory">查看全部</button>
@@ -220,7 +229,6 @@
               <summary>
                 <span>
                   <strong>记一句观察</strong>
-                  <small>你看到的，比对错更重要</small>
                 </span>
                 <span class="drawer-mark" aria-hidden="true">+</span>
               </summary>
@@ -251,7 +259,7 @@
                   </select>
                 </label>
                 <label class="observation-note">
-                  还想记住什么？<span>（可不填）</span>
+                  还想记住什么？
                   <textarea id="observationNotes" name="observationNotes" rows="2" placeholder="例如：他自己换了一种方法。"></textarea>
                 </label>
                 <button class="primary-button observation-save" id="saveObservation" type="button">保存这句话</button>
@@ -272,7 +280,6 @@
                       <strong id="familyMembersTitle">家庭成员</strong>
                       <span>1 个孩子 · 最多 6 位家长</span>
                     </div>
-                    <span class="voice-id-status">说话人由你选择</span>
                   </div>
                   <div class="family-member-list" id="familyMemberList"></div>
                   <form class="family-member-add" id="familyMemberForm">
@@ -313,14 +320,15 @@
                     <input id="goal" name="goal" placeholder="愿意表达 / 数量感 / 英语词汇" />
                   </label>
                   <label>
-                    家长码<span>（可选，4位数字）</span>
+                    家长码
                     <input id="parentPin" name="parentPin" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="保护家长页面" />
                   </label>
                   </details>
                   <label class="checkbox-line">
-                    <input id="consent" name="consent" type="checkbox" role="switch" checked />
+                    <input id="consent" name="consent" type="checkbox" role="switch" checked aria-describedby="consentHint" />
                     保存孩子的成长记录
                   </label>
+                  <p class="profile-hint" id="consentHint">关闭后仍可聊天，不再保存新记录。</p>
                   <label class="checkbox-line">
                     <input id="showSessionSummary" name="showSessionSummary" type="checkbox" role="switch" checked />
                     结束后显示本次小结
