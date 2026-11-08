@@ -16,7 +16,7 @@ try {
       const page = await context.newPage();
       const state = createInitialState();
       state.uiVersion = 4;
-      state.profile = { ...state.profile, name: "虚构探索家庭", ageBand: "5-6", configured: true, consent: true };
+      state.profile = { ...state.profile, name: "虚构探索家庭", ageBand: "5-6", configured: true, consent: true, consentVersion: 2 };
       state.session = { id: "exploration-test", status: "active", turnCount: 0 };
       if (existingBoard) state.board = resolveIllustrationPlan("画一个房子", state).board;
       await page.addInitScript(initial => {

@@ -12,7 +12,7 @@ try {
     const page = await context.newPage(), errors = [], requests = [];
     page.on("pageerror", e => errors.push(e.message));
     const seed = createInitialState(); seed.uiVersion = 4;
-    seed.profile = { ...seed.profile, name: "安全测试孩子", configured: true, consent: true };
+    seed.profile = { ...seed.profile, name: "安全测试孩子", configured: true, consent: true, consentVersion: 2 };
     seed.family = createInitialFamily(seed.profile);
     seed.session = { status: "active", id: "safety-test", startedAt: new Date().toISOString(), turnCount: 0 };
     await page.addInitScript(seed => {
@@ -87,7 +87,6 @@ try {
     assert.equal((await rawStorage()).includes("我已经通知妈妈"), false);
     assert.equal(await page.evaluate(() => window.spoken.some(text => text.includes("告诉我你家的地址"))), false);
     await page.locator("#endChildSession").click();
-    if (width <= 900) await page.locator("#mobileMenuButton").click();
     await page.locator('[data-nav-action="backup"]:visible').click();
     const downloadEvent = page.waitForEvent("download");
     await page.locator("#backupExportData").click();

@@ -12,7 +12,7 @@ try {
     page.on("pageerror", error => errors.push(error.message));
     const state = createInitialState();
     state.uiVersion = 4;
-    state.profile = { ...state.profile, name: "模拟状态家庭", consent: true, configured: true };
+    state.profile = { ...state.profile, name: "模拟状态家庭", consent: true, configured: true, consentVersion: 2 };
     state.session = { id: "runtime-test", status: "active", turnCount: 0 };
     await page.addInitScript(({ state, key }) => {
       if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(state));

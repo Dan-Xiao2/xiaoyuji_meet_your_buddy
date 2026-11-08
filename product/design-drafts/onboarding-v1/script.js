@@ -1,7 +1,7 @@
 // First-use prototype: opening → nickname → age → consent → microphone + sound check → hand over →
 // the child's first moment. Nothing is saved. The sound check opens the real microphone and only
 // reads its level in the page (no recording, no upload), then closes it.
-import { xiaoyuSvg } from "../starmap-v5/face.js";
+import { xiaoyuSvg } from "../../src/ui/xiaoyuFace.js";
 
 const $ = (selector) => document.querySelector(selector);
 for (const slot of document.querySelectorAll("[data-xiaoyu]")) slot.outerHTML = xiaoyuSvg(slot.dataset.xiaoyu);

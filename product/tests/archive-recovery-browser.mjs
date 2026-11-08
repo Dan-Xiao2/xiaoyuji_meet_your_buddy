@@ -7,7 +7,7 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
 const state = createInitialState();
 state.uiVersion = 4;
-state.profile = { ...state.profile, name: '恢复测试', configured: true, consent: true };
+state.profile = { ...state.profile, name: '恢复测试', configured: true, consent: true, consentVersion: 2 };
 const db = normalizeLocalStudentDb({ studentModels: { [state.studentModel.studentId]: state.studentModel }, growthMoments: [{
   id: 'recovery-one', studentId: state.studentModel.studentId, childQuote: '我想画一朵花', tutorResponse: '一起画吧', topics: ['花'], domain: 'art'
 }] });

@@ -8,7 +8,7 @@ try {
     const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: "reduce" });
     const page = await context.newPage();
     const state = createInitialState(); state.uiVersion = 4;
-    state.profile = { ...state.profile, name: "模拟家庭", configured: true, consent: true };
+    state.profile = { ...state.profile, name: "模拟家庭", configured: true, consent: true, consentVersion: 2 };
     state.family = createInitialFamily(state.profile);
     state.session = { status: "active", id: "drawing-dialogue", turnCount: 0 };
     await page.addInitScript(s => {

@@ -10,7 +10,7 @@ try {
     const page = await context.newPage(), errors = [], modelRequests = [];
     page.on("pageerror", error => errors.push(error.message));
     const state = createInitialState(); state.uiVersion = 4;
-    state.profile = { ...state.profile, configured: true, consent: true, name: "绘画测试" };
+    state.profile = { ...state.profile, configured: true, consent: true, consentVersion: 2, name: "绘画测试" };
     state.family = createInitialFamily(state.profile);
     state.session = { status: "active", id: "followup-test", startedAt: new Date().toISOString(), turnCount: 0 };
     await page.addInitScript(s => {

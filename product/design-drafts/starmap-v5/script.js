@@ -1,6 +1,6 @@
 // Prototype v4 behaviour. Voice states are simulated (tap Xiaoyu to step through them); the
 // listening ring follows a made-up level, not a microphone. Nothing is recorded, sent or stored.
-import { xiaoyuSvg } from "./face.js";
+import { xiaoyuSvg } from "../../src/ui/xiaoyuFace.js";
 const $ = (selector) => document.querySelector(selector);
 // Every Xiaoyu on the page is the SVG face; setFace changes all of them together.
 for (const slot of document.querySelectorAll("[data-xiaoyu]")) slot.outerHTML = xiaoyuSvg(slot.dataset.xiaoyu);

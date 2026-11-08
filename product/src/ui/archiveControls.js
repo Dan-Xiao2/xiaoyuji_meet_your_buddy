@@ -4,7 +4,7 @@ import { commitArchivePair, STATE_KEY, DB_KEY, REVISION_KEY } from "../services/
 import { growthDomains } from "../data/growthInsights.js";
 import { LEGACY_ARCHIVE_KEYS } from "../services/archiveIntegrity.js";
 
-export function mountArchiveControls({ getState, requestAccess, onCommitted, onClear }) {
+export function mountArchiveControls({ getState, requestAccess, onCommitted, onClear, onSetupNeeded }) {
   const editor = document.querySelector("#momentEditor");
   const restore = document.querySelector("#restoreDialog");
   const clear = document.querySelector("#clearArchiveDialog");
@@ -41,7 +41,7 @@ export function mountArchiveControls({ getState, requestAccess, onCommitted, onC
       if (dialog === restore) pending = null;
       if (dialog === clear) {
         clearSnapshot = null;
-        if (!getState().profile.configured) { document.querySelector("#startChildName").focus(); return; }
+        if (!getState().profile.configured) { onSetupNeeded?.(); return; }
       }
       restoreFocus();
     });

@@ -11,7 +11,7 @@ try {
     let release, failure = false, delay = true, available = true;
     page.on("pageerror", error => errors.push(error.message));
     const state = createInitialState(); state.uiVersion = 4;
-    state.profile = { ...state.profile, name: "模拟家庭", configured: true, consent: true };
+    state.profile = { ...state.profile, name: "模拟家庭", configured: true, consent: true, consentVersion: 2 };
     state.family = createInitialFamily(state.profile);
     state.session = { status: "active", id: "open-drawing-test", turnCount: 0 };
     await page.addInitScript(s => {

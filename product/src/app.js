@@ -28,6 +28,7 @@ import { REVISION_KEY } from "./services/localPersistence.js";
 import { getDurableArchiveStatus, subscribeDurableArchive } from "./services/indexedArchive.js";
 import { renderAdultSummary, renderParentTimeline } from "./ui/summary.js";
 import { renderOfflineTask } from "./ui/offlineTask.js";
+import { xiaoyuSvg } from "./ui/xiaoyuFace.js";
 import { createParentNoteText } from "./ui/parentNote.js";
 import { applyOfflineObservation, createObservationSummary } from "./student/offlineObservationUpdater.js";
 import { migrateStudentModel } from "./student/studentSchema.js";
@@ -61,10 +62,14 @@ import {
 } from "./data/familyModel.js";
 
 const UI_STATE_VERSION = 4;
+// Raised when what the guardian agrees to changes; a profile that agreed to an older version is asked
+// again before the next chat. 2: the three facts, including cloud processing (2026-11-08).
+const CONSENT_VERSION = 2;
+const needsConsent = () => (state.profile.consentVersion || 0) < CONSENT_VERSION;
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 
 document.querySelector("#desktopNavigation").innerHTML = createNavigationMarkup("desktop");
-document.querySelector("#mobileDrawerNavigation").innerHTML = createNavigationMarkup("drawer");
+document.querySelector("#parentTabs").innerHTML = createNavigationMarkup("tabs");
 
 const dom = {
   workspace: document.querySelector(".workspace"),
@@ -76,9 +81,14 @@ const dom = {
   parentTodayPanel: document.querySelector("#parentTodayPanel"),
   offlinePanel: document.querySelector("#offlinePanel"),
   parentRecent: document.querySelector("#parentRecent"),
-  startChildName: document.querySelector("#startChildName"),
-  startAgeBand: document.querySelector("#startAgeBand"),
-  startConsent: document.querySelector("#startConsent"),
+  setupFlow: document.querySelector("#setupFlow"),
+  setupName: document.querySelector("#setupName"),
+  setupNameNext: document.querySelector("#setupNameNext"),
+  setupConsentStatus: document.querySelector("#setupConsentStatus"),
+  setupSaveStatus: document.querySelector("#setupSaveStatus"),
+  profileSubpage: document.querySelector("#profileSubpage"),
+  familySubpage: document.querySelector("#familySubpage"),
+  profileListStatus: document.querySelector("#profileListStatus"),
   startChildSession: document.querySelector("#startChildSession"),
   endParentSession: document.querySelector("#endParentSession"),
   sessionFormStatus: document.querySelector("#sessionFormStatus"),
@@ -120,14 +130,8 @@ const dom = {
   voiceDiagnostic: document.querySelector("#voiceDiagnostic"),
   speakReplies: document.querySelector("#speakReplies"),
   connectionStatus: document.querySelector("#connectionStatus"),
-  mobileMenuButton: document.querySelector("#mobileMenuButton"),
-  mobileDrawer: document.querySelector("#mobileDrawer"),
-  mobileDrawerBackdrop: document.querySelector("#mobileDrawerBackdrop"),
-  mobileDrawerPanel: document.querySelector("#mobileDrawerPanel"),
-  mobileDrawerClose: document.querySelector("#mobileDrawerClose"),
-  mobileDrawerNav: document.querySelector(".mobile-drawer-nav"),
-  mobileDrawerProfile: document.querySelector("#mobileDrawerProfile"),
-  mobileDrawerStatus: document.querySelector("#mobileDrawerStatus"),
+  parentEntry: document.querySelector("#parentEntry"),
+  parentEntryHint: document.querySelector("#parentEntryHint"),
   activeSpeaker: document.querySelector("#activeSpeaker"),
   speakerPickerWrap: document.querySelector("#speakerPickerWrap"),
   familyMemberList: document.querySelector("#familyMemberList"),
@@ -197,7 +201,6 @@ const recentVoiceTimings = [];
 let voiceRenderQueued = false;
 let parentUnlockedUntil = 0;
 let pendingParentAction = null;
-let mobileDrawerTimer = null;
 let growthSelection = { range: "week", offset: 0, bucket: null };
 let profileSaving = false;
 let childLayoutTimer = null;
@@ -311,7 +314,8 @@ const archiveControls = mountArchiveControls({
     pendingParentAction = null;
     applyReplacedArchive(createInitialState(), "parent");
     document.querySelector("#archiveControlStatus").textContent = "";
-  }
+  },
+  onSetupNeeded: openSetup
 });
 
 // Invalidate business work before stopping media, so no late result can start a new playback.
@@ -434,6 +438,8 @@ function hydrateState(savedState) {
   savedState = recoverInterruptedConversationState(savedState);
   const resetVisualSession = savedState.uiVersion !== UI_STATE_VERSION;
   const profile = migrateLegacyProfile(savedState.profile, savedState.uiVersion);
+  // A chat left open under older consent wording is not resumed; the guardian sees the consent first.
+  const consentStale = (profile.consentVersion || 0) < CONSENT_VERSION;
   const studentModel = migrateStudentModel(savedState.studentModel || freshState.studentModel, profile);
   const memory = syncLegacyMemory(resetVisualSession ? freshState.memory : { ...freshState.memory, ...(savedState.memory || {}) }, studentModel);
 
@@ -451,7 +457,7 @@ function hydrateState(savedState) {
     lastAssessment: resetVisualSession ? null : savedState.lastAssessment,
     llmStatus: resetVisualSession ? undefined : savedState.llmStatus,
     offlineTask: resetVisualSession ? freshState.offlineTask : savedState.offlineTask || freshState.offlineTask,
-    session: resetVisualSession ? createIdleSession() : savedState.session || createIdleSession(),
+    session: resetVisualSession || consentStale ? createIdleSession() : savedState.session || createIdleSession(),
     lastSessionSummary: savedState.lastSessionSummary || null,
     growthEvidence: null
   };
@@ -474,11 +480,19 @@ function syncProfileForm() {
   dom.profileForm.goal.value = state.profile.goal;
   dom.profileForm.consent.checked = state.profile.consent;
   dom.profileForm.showSessionSummary.checked = state.profile.showSessionSummary !== false;
-  dom.startChildName.value = state.profile.name;
-  dom.startAgeBand.value = state.profile.ageBand;
-  dom.startConsent.checked = state.profile.consent;
   dom.parentPin.value = "";
   dom.clearParentPin.hidden = !state.profile.parentPinHash;
+  renderProfileRows();
+}
+
+function renderProfileRows() {
+  const values = {
+    name: state.profile.name,
+    age: `${state.profile.ageBand.replace("-", "–")} 岁`,
+    prefs: state.profile.interest || "未填写",
+    pin: state.profile.parentPinHash ? "已设置" : "未设置"
+  };
+  for (const cell of document.querySelectorAll("[data-profile-value]")) cell.textContent = values[cell.dataset.profileValue];
 }
 
 function render() {
@@ -503,9 +517,7 @@ function render() {
   dom.voiceSupportText.textContent = createVoiceSupportText();
   dom.voiceDiagnostic.innerHTML = createVoiceDiagnosticHtml();
   dom.clearParentPin.hidden = !state.profile.parentPinHash;
-  dom.mobileDrawerProfile.textContent = state.profile.configured
-    ? `${state.family.members.length || 1} 位家人 · ${state.profile.name}`
-    : "第一次使用，请大人先设置";
+  renderProfileRows();
   renderVoiceState();
 }
 
@@ -588,17 +600,15 @@ function renderSessionFlow() {
   const name = speaker?.name || state.profile.name || "家人";
   dom.childStage.hidden = !active;
   dom.sessionGate.hidden = active;
+  dom.parentEntry.hidden = active; // during a chat, "结束" on the child's screen is the way out
   dom.childSessionName.textContent = name;
-  dom.startChildName.disabled = active;
-  dom.startAgeBand.disabled = active;
-  dom.startConsent.disabled = active;
   dom.endParentSession.hidden = !active;
-  dom.startChildSession.textContent = active ? "回到聊天" : "开始聊天";
-  // "先认识一下孩子" only before the first setup; during a chat the panel is about the chat.
-  document.querySelector("#parentSessionTitle").textContent = active ? "正在聊天" : state.profile.configured ? "开始聊天" : "先认识一下孩子";
-  dom.parentSessionPanel.dataset.profileStatus = state.profile.configured ? "configured" : "new";
-  dom.parentSessionPanel.hidden = state.profile.configured && !active;
+  // Setup and consent live in the step-by-step flow; this panel is only about the chat in progress.
+  dom.parentSessionPanel.hidden = !active;
   dom.parentMore.hidden = !state.profile.configured;
+  const setupRow = document.querySelector("#parentSetupRow");
+  setupRow.hidden = state.profile.configured && !needsConsent();
+  setupRow.firstElementChild.textContent = state.profile.configured ? "隐私政策已更新" : "开始设置";
 
   if (active) {
     dom.parentSessionPanel.dataset.sessionStatus = "active";
@@ -611,17 +621,18 @@ function renderSessionFlow() {
   dom.sessionFormStatus.textContent = ended && state.lastSessionSummary
     ? `${state.lastSessionSummary.title}。${state.lastSessionSummary.parentPrompt}`
     : "";
-  const homeDetail = state.profile.configured ? "开始聊天" : "请大人先设置";
-  const homeAction = state.profile.configured ? "quick-start" : "show-parent";
+  const ready = state.profile.configured && !needsConsent();
+  const homeDetail = ready ? "开始聊天" : state.profile.configured ? "隐私政策已更新" : "需要家长完成设置";
+  const homeAction = ready ? "quick-start" : "setup";
   dom.sessionGate.innerHTML = `
     <div class="app-home">
       <button class="app-talk-launch" type="button" data-session-action="${homeAction}" aria-label="${homeDetail}">
-        <img class="app-talk-character" src="./assets/xiaoyu-planet.png" alt="" />
+        ${xiaoyuSvg("app-talk-character")}
       </button>
       <div class="app-home-instruction">
         <strong>${homeDetail}</strong>
       </div>
-      ${state.profile.configured ? "" : `<button class="primary-button app-home-setup" type="button" data-session-action="show-parent">去设置</button>`}
+      ${ready ? "" : `<button class="primary-button app-home-setup" type="button" data-session-action="setup">${state.profile.configured ? "家长确认" : "开始设置"}</button>`}
     </div>
   `;
 }
@@ -658,9 +669,7 @@ function renderFamilyControls() {
 
   const caregiverCount = family.members.filter((member) => member.role !== "child").length;
   const full = caregiverCount >= MAX_CAREGIVERS;
-  dom.familyMemberName.disabled = full;
-  dom.familyMemberRole.disabled = full;
-  dom.familyMemberForm.querySelector("button").disabled = full;
+  document.querySelector("#familyAddOpen").disabled = full;
   if (full && !dom.familyMemberStatus.textContent) dom.familyMemberStatus.textContent = "已经登记 6 位家长或照护者。";
 }
 
@@ -1116,8 +1125,9 @@ function recordVoiceTiming({ stage, latencyMs, serverLatencyMs = 0, reason, audi
 
 async function saveProfileFromForm() {
   if (profileSaving) return false;
+  const status = dom.profileSubpage.hidden ? dom.profileListStatus : dom.profileSaveStatus;
   if (!dom.profileForm.studentName.value.trim()) {
-    dom.profileSaveStatus.textContent = "先填写孩子昵称。";
+    status.textContent = "先填写孩子昵称。";
     dom.profileForm.studentName.setAttribute("aria-invalid", "true");
     dom.profileForm.studentName.focus();
     return false;
@@ -1125,7 +1135,7 @@ async function saveProfileFromForm() {
   dom.profileForm.studentName.removeAttribute("aria-invalid");
   const enteredPin = dom.parentPin.value.trim();
   if (enteredPin && !normalizeParentPin(enteredPin)) {
-    dom.profileSaveStatus.textContent = "家长码需要是4位数字。";
+    status.textContent = "家长码需要是4位数字。";
     return false;
   }
   profileSaving = true;
@@ -1144,14 +1154,14 @@ async function saveProfileFromForm() {
     configured: Boolean(dom.profileForm.studentName.value.trim())
   }), { type: APP_EVENT.PROFILE_UPDATED });
   if (!persistence.isSnapshotSaved(state) || !persistence.saveProfile(state).ok) {
-    dom.profileSaveStatus.textContent = "没能完整保存，请重试或下载备份。";
+    status.textContent = "没能完整保存，请重试或下载备份。";
     return false;
   }
-  dom.profileSaveStatus.textContent = enteredPin ? "资料和家长码已保存。" : "资料已保存。";
+  status.textContent = enteredPin ? "资料和家长码已保存。" : "资料已保存。";
   syncProfileForm();
   return true;
   } catch {
-    dom.profileSaveStatus.textContent = "没能完整保存，请重试或下载备份。";
+    status.textContent = "没能完整保存，请重试或下载备份。";
     return false;
   } finally {
     profileSaving = false;
@@ -1168,26 +1178,14 @@ function startSessionFromParent() {
     return;
   }
 
-  const name = state.profile.configured ? state.profile.name : dom.startChildName.value.trim();
-  const consent = state.profile.configured ? state.profile.consent : dom.startConsent.checked;
-  if (!name) {
-    dom.sessionFormStatus.textContent = "先填写孩子昵称。";
-    dom.startChildName.focus();
-    return;
-  }
-  // Only the first setup needs the guardian's consent (docs/product-framework.md). Switching saving
-  // off later in the profile keeps chatting possible; nothing new is then saved (applicationPersistence).
-  if (!consent && !state.profile.configured) {
-    dom.sessionFormStatus.textContent = "需要家长同意后，才能在本机保存成长记录。";
-    dom.startConsent.focus();
+  // The guardian's consent is needed at first setup and whenever its wording changes
+  // (docs/product-framework.md); both go through the setup flow first.
+  if (!state.profile.configured || needsConsent()) {
+    openSetup();
     return;
   }
 
-  appStore.update(current => startSessionState(current, {
-    name,
-    ageBand: current.profile.configured ? current.profile.ageBand : dom.startAgeBand.value,
-    consent, configured: true
-  }), { type: APP_EVENT.SESSION_STARTED });
+  appStore.update(current => startSessionState(current, { name: current.profile.name }), { type: APP_EVENT.SESSION_STARTED });
   const saved = persistence.startSession(state);
   const fullySaved = saved.ok && persistence.isSnapshotSaved(state);
   parentUnlockedUntil = 0;
@@ -1198,8 +1196,8 @@ function startSessionFromParent() {
 }
 
 function startSessionFromMobileHome() {
-  if (!state.profile.configured) {
-    showParentSetup("第一次使用，请大人先完成简单设置。");
+  if (!state.profile.configured || needsConsent()) {
+    openSetup();
     return;
   }
   syncProfileForm();
@@ -1207,13 +1205,271 @@ function startSessionFromMobileHome() {
   window.setTimeout(() => dom.mainVoiceButton.focus(), 0);
 }
 
-function showParentSetup(message = "") {
-  switchView("parent");
-  dom.sessionFormStatus.textContent = message;
+// First use: opening → consent → nickname → age → microphone check → hand over. A consent update:
+// consent only. One page at a time; the profile is saved after the age page, so leaving before then
+// changes nothing. Xiaoyu stays at the top and speaks each question in her bubble.
+const SETUP_STEPS = { first: ["opening", "consent", "name", "age", "mic", "handover"], update: ["consent"] };
+const SETUP_DOTS = ["consent", "name", "age", "mic"];
+let setup = null;
+let setupTimer = 0;
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+document.querySelector("#setupXiaoyu").insertAdjacentHTML("afterbegin", xiaoyuSvg());
+const setupFace = (face) => { dom.setupFlow.querySelector(".xy").dataset.face = face; };
+const kidName = () => setup?.name || "你";
+
+function setupSay(text, face = "idle") {
+  const bubble = document.querySelector("#setupBubble");
+  bubble.textContent = text;
+  bubble.hidden = !text;
+  setupFace(face);
+}
+
+function openSetup() {
+  const mode = state.profile.configured ? "update" : "first";
+  setup = { mode, step: "", name: "", ageBand: "" };
+  document.querySelector("#setupTitle").textContent = mode === "update" ? "隐私政策更新" : "个人信息保护提示";
+  document.querySelector("#setupLead").textContent = mode === "update"
+    ? "我们补充了声音和聊天内容的云端处理说明，请家长重新确认"
+    : "请孩子的家长或监护人阅读并确认";
+  dom.setupConsentStatus.textContent = "";
+  dom.setupSaveStatus.textContent = "";
+  dom.setupName.value = "";
+  dom.setupNameNext.disabled = true;
+  for (const card of document.querySelectorAll("[data-setup-age]")) card.setAttribute("aria-checked", "false");
+  document.querySelector("#setupStar").classList.remove("is-shown");
+  dom.setupFlow.hidden = false;
+  showSetupStep(SETUP_STEPS[mode][0]);
+}
+
+const SETUP_ENTER = {
+  opening() {
+    setupSay("嗨！我是小宇", "happy");
+    setupTimer = window.setTimeout(() => showSetupStep("consent"), reducedMotion() ? 300 : 1600);
+  },
+  // The consent is the parent's decision: formal wording, no character speech.
+  consent() { setupSay("", "idle"); },
+  name() { setupSay(setup.name ? `嗨，${setup.name}！` : "你叫什么名字呀？"); },
+  age() { setupSay(`${kidName()}几岁啦？`); },
+  mic() {
+    setupSay(`我想听听${kidName()}的声音`);
+    document.querySelector("#setupMicAsk").hidden = false;
+    document.querySelector("#setupMicCheck").hidden = true;
+    document.querySelector("#setupMicDenied").hidden = true;
+  },
+  handover() { setupSay(`准备好啦！请把手机交给${kidName()}`, "happy"); }
+};
+
+function showSetupStep(step) {
+  window.clearTimeout(setupTimer);
+  if (setup.step === "mic" && step !== "mic") stopSetupMic();
+  setup.step = step;
+  dom.setupFlow.dataset.step = step;
+  for (const page of dom.setupFlow.querySelectorAll("[data-setup-step]")) page.hidden = page.dataset.setupStep !== step;
+  const dots = document.querySelector("#setupDots");
+  dots.hidden = setup.mode === "update" || !SETUP_DOTS.includes(step);
+  [...dots.children].forEach((dot, index) => {
+    const at = SETUP_DOTS.indexOf(step);
+    dot.className = index < at ? "is-done" : index === at ? "is-current" : "";
+  });
+  document.querySelector("#setupBack").hidden = step === "opening";
+  SETUP_ENTER[step]();
+  const focusTarget = { consent: "#setupAgree", name: "#setupName", age: "[data-setup-age]", mic: "#setupMicAllow", handover: "#setupHandover" }[step];
+  if (focusTarget) window.setTimeout(() => dom.setupFlow.querySelector(focusTarget)?.focus({ preventScroll: true }), 0);
+}
+
+function closeSetup() {
+  window.clearTimeout(setupTimer);
+  stopSetupMic();
+  setup = null;
+  dom.setupFlow.hidden = true;
+  document.querySelector('[data-session-action="setup"], [data-session-action="quick-start"]')?.focus();
+}
+
+function saveSetup() {
+  const first = setup.mode === "first";
+  appStore.update(current => updateProfileState(current, first
+    ? { name: setup.name, ageBand: setup.ageBand, consent: true, consentVersion: CONSENT_VERSION, configured: true }
+    : { consentVersion: CONSENT_VERSION }), { type: APP_EVENT.PROFILE_UPDATED });
+  if (!persistence.isSnapshotSaved(state) || !persistence.saveProfile(state).ok) {
+    (first ? dom.setupSaveStatus : dom.setupConsentStatus).textContent = "没能保存，请再试一次。";
+    return false;
+  }
+  syncProfileForm();
+  return true;
+}
+
+// Microphone check: the real microphone, level only, closed when the page changes.
+let setupMic = null;
+function stopSetupMic() {
+  if (!setupMic) return;
+  cancelAnimationFrame(setupMic.frame);
+  window.clearTimeout(setupMic.nudge);
+  setupMic.stream.getTracks().forEach((track) => track.stop());
+  setupMic.context.close().catch(() => {});
+  setupMic = null;
+  dom.setupFlow.classList.remove("is-listening");
+}
+
+async function startSetupMic() {
+  voice.preparePlayback();
+  // Created in the tap, which also lets an iPhone play Xiaoyu's voice later.
+  const context = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new DOMException("unsupported", "NotSupportedError");
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (setup?.step !== "mic") { stream.getTracks().forEach((track) => track.stop()); context.close().catch(() => {}); return; }
+    await context.resume().catch(() => {});
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 1024;
+    context.createMediaStreamSource(stream).connect(analyser);
+    setupMic = { context, stream, analyser, frame: 0, nudge: 0 };
+    listenSetupMic();
+  } catch {
+    context.close().catch(() => {});
+    setupSay("我还听不到你");
+    document.querySelector("#setupMicAsk").hidden = true;
+    document.querySelector("#setupMicDenied").hidden = false;
+  }
+}
+
+function listenSetupMic() {
+  document.querySelector("#setupMicAsk").hidden = true;
+  document.querySelector("#setupMicCheck").hidden = false;
+  document.querySelector("#setupSay").hidden = false;
+  document.querySelector("#setupMicDone").hidden = true;
+  document.querySelector("#setupMicSkip").hidden = false;
+  setupSay("我在听……", "listening");
+  dom.setupFlow.classList.add("is-listening");
+  const samples = new Float32Array(setupMic.analyser.fftSize);
+  let loudSince = null;
+  setupMic.nudge = window.setTimeout(() => setupSay("大声一点点试试？", "listening"), 8000);
+  const tick = () => {
+    if (!setupMic) return;
+    setupMic.analyser.getFloatTimeDomainData(samples);
+    let sum = 0;
+    for (const value of samples) sum += value * value;
+    const level = Math.sqrt(sum / samples.length);
+    dom.setupFlow.style.setProperty("--level", (1 + Math.min(level * 5, .28)).toFixed(3));
+    if (level > .035) loudSince ??= performance.now(); else if (level < .02) loudSince = null;
+    if (loudSince !== null && performance.now() - loudSince > 300) { heardSetupMic(); return; }
+    setupMic.frame = requestAnimationFrame(tick);
+  };
+  setupMic.frame = requestAnimationFrame(tick);
+}
+
+function heardSetupMic() {
+  stopSetupMic();
+  setupSay("我听到啦！", "happy");
+  const star = document.querySelector("#setupStar");
+  star.classList.remove("is-shown"); void star.offsetWidth; star.classList.add("is-shown");
+  document.querySelector("#setupSay").hidden = true;
+  document.querySelector("#setupMicSkip").hidden = true;
+  document.querySelector("#setupMicDone").hidden = false;
+  document.querySelector("#setupMicDone").focus({ preventScroll: true });
+}
+
+dom.setupFlow.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSetup(); });
+document.querySelector("#setupBack").addEventListener("click", () => {
+  const steps = SETUP_STEPS[setup.mode];
+  const index = steps.indexOf(setup.step);
+  if (index > 1 || (index === 1 && steps[0] !== "opening")) showSetupStep(steps[index - 1]); else closeSetup();
+});
+document.querySelector("#setupAgree").addEventListener("click", () => {
+  if (setup.mode === "first") { showSetupStep("name"); return; }
+  if (saveSetup()) closeSetup();
+});
+document.querySelector("#setupDisagree").addEventListener("click", () => {
+  dom.setupConsentStatus.textContent = "未经家长同意，无法使用小宇记。";
+});
+let setupTyping = 0;
+dom.setupName.addEventListener("input", () => {
+  setup.name = dom.setupName.value.trim();
+  dom.setupNameNext.disabled = !setup.name;
+  window.clearTimeout(setupTyping);
+  SETUP_ENTER.name();
+  if (setup.name) setupTyping = window.setTimeout(() => setupFace("happy"), 600);
+});
+dom.setupName.addEventListener("keydown", (event) => { if (event.key === "Enter" && dom.setupName.value.trim()) dom.setupNameNext.click(); });
+dom.setupNameNext.addEventListener("click", () => {
+  setup.name = dom.setupName.value.trim();
+  showSetupStep("age");
+});
+for (const card of document.querySelectorAll("[data-setup-age]")) {
+  card.addEventListener("click", () => {
+    for (const other of document.querySelectorAll("[data-setup-age]")) other.setAttribute("aria-checked", String(other === card));
+    setup.ageBand = card.dataset.setupAge;
+    if (!saveSetup()) return;
+    setupFace("happy");
+    setupTimer = window.setTimeout(() => showSetupStep("mic"), reducedMotion() ? 0 : 420);
+  });
+}
+document.querySelector("#setupMicAllow").addEventListener("click", startSetupMic);
+document.querySelector("#setupMicRetry").addEventListener("click", startSetupMic);
+for (const id of ["#setupMicDone", "#setupMicSkip", "#setupMicLater", "#setupMicAskSkip"]) {
+  document.querySelector(id).addEventListener("click", () => showSetupStep("handover"));
+}
+// The child's first moment: the chat starts straight away.
+document.querySelector("#setupHandover").addEventListener("click", () => {
+  closeSetup();
+  startSessionFromMobileHome();
+});
+
+// Occasional blink while the setup is open (not while smiling).
+// Xiaoyu blinks now and then wherever she is shown (setup, home), but not while smiling.
+(function blink() {
   window.setTimeout(() => {
-    dom.parentSessionPanel.scrollIntoView({ block: "start" });
-    if (!state.profile.configured) dom.startChildName.focus();
-  }, 0);
+    if (!reducedMotion()) {
+      for (const svg of document.querySelectorAll(".xy")) {
+        if (!svg.getClientRects().length || svg.dataset.face === "happy") continue;
+        svg.classList.add("is-blinking");
+        window.setTimeout(() => svg.classList.remove("is-blinking"), 140);
+      }
+    }
+    blink();
+  }, 3000 + Math.random() * 2500);
+})();
+
+// Family settings: each row opens its own page (one setting at a time); the switches save as they change.
+const SUBPAGE_TITLES = { name: "昵称", age: "年龄", prefs: "陪伴偏好", pin: "家长码" };
+let subpageOpener = null;
+
+function openPage(page, opener, focusSelector) {
+  page.hidden = false;
+  subpageOpener = opener;
+  window.setTimeout(() => page.querySelector(focusSelector)?.focus(), 0);
+}
+
+function closeSubpage() {
+  for (const page of [dom.profileSubpage, dom.familySubpage]) page.hidden = true;
+  subpageOpener?.focus();
+  subpageOpener = null;
+}
+
+function openSubpage(name, opener) {
+  syncProfileForm();
+  dom.profileSaveStatus.textContent = "";
+  dom.profileListStatus.textContent = "";
+  document.querySelector("#profileSubpageTitle").textContent = SUBPAGE_TITLES[name];
+  for (const panel of dom.profileSubpage.querySelectorAll("[data-panel]")) panel.hidden = panel.dataset.panel !== name;
+  openPage(dom.profileSubpage, opener, `[data-panel="${name}"] input:checked, [data-panel="${name}"] input`);
+}
+
+document.querySelector("#parentSetupRow").addEventListener("click", openSetup);
+for (const row of document.querySelectorAll("[data-subpage]")) {
+  row.addEventListener("click", () => openSubpage(row.dataset.subpage, row));
+}
+document.querySelector("#familyAddOpen").addEventListener("click", (event) => {
+  dom.familyMemberName.value = "";
+  document.querySelector("#familyAddStatus").textContent = "";
+  dom.familyMemberStatus.textContent = "";
+  openPage(dom.familySubpage, event.currentTarget, "#familyMemberName");
+});
+for (const page of [dom.profileSubpage, dom.familySubpage]) {
+  page.querySelector("[data-subpage-close]").addEventListener("click", closeSubpage);
+  page.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSubpage(); });
+}
+for (const toggle of [dom.profileForm.consent, dom.profileForm.showSessionSummary]) {
+  toggle.addEventListener("change", () => { if (dom.profileSubpage.hidden) void saveProfileFromForm(); });
 }
 
 function finishCurrentSession({ farewell = null } = {}) {
@@ -1250,41 +1506,46 @@ function switchView(view) {
     else item.removeAttribute("aria-current");
   });
   dom.workspace.dataset.activeView = view;
+  document.body.dataset.mode = view === "learn" ? "child" : "parent";
   requestVoiceRender();
   window.scrollTo({ top: 0, behavior: "auto" });
-  closeMobileDrawer();
 }
 
-function openMobileDrawer() {
-  if (mobileDrawerTimer) window.clearTimeout(mobileDrawerTimer);
-  dom.mobileDrawer.hidden = false;
-  document.body.classList.add("mobile-menu-open");
-  dom.mobileMenuButton.setAttribute("aria-expanded", "true");
-  dom.workspace.inert = true;
-  document.querySelector(".topbar").inert = true;
-  window.requestAnimationFrame(() => {
-    dom.mobileDrawer.classList.add("is-open");
-    dom.mobileDrawerPanel.focus({ preventScroll: true });
-  });
+// Parent entry on the child's screen: hold about a second (a ring fills) to enter; a short tap only
+// shows how. Keyboard and assistive activation (no pointer) enters directly.
+const PARENT_HOLD_MS = 1000;
+let parentHold = 0;
+let parentHintTimer = 0;
+function enterParentArea() {
+  dom.parentEntryHint.hidden = true;
+  requestParentAccess(() => switchView("memory"));
 }
-
-function closeMobileDrawer() {
-  if (dom.mobileDrawer.hidden) return;
-  dom.mobileDrawer.classList.remove("is-open");
-  document.body.classList.remove("mobile-menu-open");
-  dom.mobileMenuButton.setAttribute("aria-expanded", "false");
-  dom.workspace.inert = false;
-  document.querySelector(".topbar").inert = false;
-  if (dom.mobileDrawer.contains(document.activeElement)) dom.mobileMenuButton.focus();
-  if (mobileDrawerTimer) window.clearTimeout(mobileDrawerTimer);
-  mobileDrawerTimer = window.setTimeout(() => {
-    dom.mobileDrawer.hidden = true;
-    mobileDrawerTimer = null;
-  }, 240);
+function cancelParentHold(showHint) {
+  if (!parentHold) return;
+  window.clearTimeout(parentHold);
+  parentHold = 0;
+  dom.parentEntry.classList.remove("is-holding");
+  if (!showHint) return;
+  dom.parentEntryHint.hidden = false;
+  window.clearTimeout(parentHintTimer);
+  parentHintTimer = window.setTimeout(() => { dom.parentEntryHint.hidden = true; }, 1800);
 }
+dom.parentEntry.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  dom.parentEntry.classList.add("is-holding");
+  parentHold = window.setTimeout(() => {
+    parentHold = 0;
+    dom.parentEntry.classList.remove("is-holding");
+    enterParentArea();
+  }, PARENT_HOLD_MS);
+});
+dom.parentEntry.addEventListener("pointerup", () => cancelParentHold(true));
+dom.parentEntry.addEventListener("pointerleave", () => cancelParentHold(false));
+dom.parentEntry.addEventListener("pointercancel", () => cancelParentHold(false));
+dom.parentEntry.addEventListener("contextmenu", (event) => event.preventDefault());
+dom.parentEntry.addEventListener("click", (event) => { if (event.detail === 0) enterParentArea(); });
 
 function runNavigationAction(action) {
-  closeMobileDrawer();
   const item = getNavigationItem(action);
   if (!item) return;
   if (!item.protected) {
@@ -1357,7 +1618,14 @@ dom.mainVoiceButton.addEventListener("keyup", (event) => {
   voiceSession.finishInput();
 });
 
-dom.profileForm.addEventListener("submit", (event) => { event.preventDefault(); saveProfileFromForm(); });
+dom.profileForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const fromPage = !dom.profileSubpage.hidden;
+  if (await saveProfileFromForm() && fromPage) {
+    dom.profileListStatus.textContent = dom.profileSaveStatus.textContent;
+    closeSubpage();
+  }
+});
 dom.startChildSession.addEventListener("click", startSessionFromParent);
 dom.endChildSession.addEventListener("click", () => requestParentAccess(finishCurrentSession));
 dom.whiteboard.addEventListener("drawing-undo", () => {
@@ -1375,15 +1643,16 @@ dom.activeSpeaker.addEventListener("change", () => {
 });
 dom.familyMemberForm.addEventListener("submit", (event) => {
   event.preventDefault();
+  const familyAddStatus = document.querySelector("#familyAddStatus");
   const name = dom.familyMemberName.value.trim();
   if (!name) {
-    dom.familyMemberStatus.textContent = "先填写一个称呼。";
+    familyAddStatus.textContent = "先填写一个称呼。";
     dom.familyMemberName.focus();
     return;
   }
   const caregiverCount = state.family.members.filter((member) => member.role !== "child").length;
   if (caregiverCount >= MAX_CAREGIVERS) {
-    dom.familyMemberStatus.textContent = "一个孩子档案最多可以登记 6 位家长或照护者。";
+    familyAddStatus.textContent = "一个孩子档案最多可以登记 6 位家长或照护者。";
     return;
   }
   const previousCount = state.family.members.length;
@@ -1391,11 +1660,12 @@ dom.familyMemberForm.addEventListener("submit", (event) => {
     name, role: dom.familyMemberRole.value
   }) }), { type: APP_EVENT.FAMILY_UPDATED });
   if (state.family.members.length === previousCount) {
-    dom.familyMemberStatus.textContent = "没有添加成功，请换一个称呼再试。";
+    familyAddStatus.textContent = "没有添加成功，请换一个称呼再试。";
     return;
   }
   dom.familyMemberName.value = "";
   dom.familyMemberStatus.textContent = `已添加${name}。聊天时可以选择由谁说话。`;
+  closeSubpage();
 });
 dom.familyMemberList.addEventListener("click", (event) => {
   const button = event.target.closest('[data-family-action="remove"]');
@@ -1407,27 +1677,13 @@ dom.familyMemberList.addEventListener("click", (event) => {
 });
 dom.sessionGate.addEventListener("click", (event) => {
   voice.preparePlayback();
-  if (event.target.closest('[data-session-action="show-parent"]')) switchView("parent");
+  if (event.target.closest('[data-session-action="setup"]')) openSetup();
   if (event.target.closest('[data-session-action="quick-start"]')) startSessionFromMobileHome();
   const navigationButton = event.target.closest("[data-nav-action]");
   if (navigationButton) runNavigationAction(navigationButton.dataset.navAction);
 });
 
-dom.mobileMenuButton.addEventListener("click", openMobileDrawer);
-dom.mobileDrawerBackdrop.addEventListener("click", closeMobileDrawer);
-dom.mobileDrawerClose.addEventListener("click", closeMobileDrawer);
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Tab" && !dom.mobileDrawer.hidden) {
-    const controls = [...dom.mobileDrawerPanel.querySelectorAll("button:not(:disabled)")];
-    const first = controls[0], last = controls.at(-1);
-    if (event.shiftKey && [dom.mobileDrawerPanel, first].includes(document.activeElement)) { event.preventDefault(); last.focus(); }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-  }
-  if (event.key === "Escape" && !dom.mobileDrawer.hidden) {
-    closeMobileDrawer();
-    dom.mobileMenuButton.focus();
-  }
-});
+
 
 dom.resetSession.addEventListener("click", () => {
   const fresh = createInitialState();
@@ -1460,7 +1716,9 @@ dom.saveObservation.addEventListener("click", saveOfflineObservation);
 dom.clearParentPin.addEventListener("click", () => {
   appStore.update(current => updateProfileState(current, { parentPinHash: "" }), { type: APP_EVENT.PROFILE_UPDATED });
   parentUnlockedUntil = 0;
-  dom.profileSaveStatus.textContent = "家长码已清除。";
+  dom.profileSaveStatus.textContent = "";
+  dom.profileListStatus.textContent = "家长码已清除。";
+  closeSubpage();
 });
 
 dom.parentUnlockForm.addEventListener("submit", async (event) => {
@@ -1626,9 +1884,8 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => stopInteraction());
 
 syncProfileForm();
-if (!state.profile.configured && state.session?.status !== "active" && !window.matchMedia("(max-width: 900px)").matches) {
-  switchView("parent");
-}
 commitState(state, { type: APP_EVENT.INITIALIZED });
+// The very first open goes straight into the setup, starting with Xiaoyu's hello.
+if (!state.profile.configured && state.session?.status !== "active") openSetup();
 document.documentElement.dataset.appReady = "true";
 loadVoiceStatus();

@@ -1,4 +1,4 @@
-/* Xiaoyu's face (face.js): shared by the prototypes. */
+/* Xiaoyu's face (src/ui/xiaoyuFace.js): shared by the product page and the prototypes. */
 .xy { display: block; overflow: visible; }
 .xy .xy-eyes-happy, .xy .xy-cheeks, .xy .xy-mouth > * { display: none; }
 .xy .xy-eye, .xy .xy-mouth > *, .xy .xy-eyes-open { transform-box: fill-box; transform-origin: center; }

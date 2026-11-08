@@ -11,29 +11,27 @@
     <link rel="stylesheet" href="./src/styles/components.css" />
     <link rel="stylesheet" href="./src/styles/responsive.css" />
     <link rel="stylesheet" href="./src/styles/whiteboard-scene.css" />
+    <link rel="stylesheet" href="./src/styles/xiaoyu-face.css" />
     <link rel="stylesheet" href="./src/styles/design-system.css" />
   </head>
-  <body>
+  <body data-mode="child">
     <div class="app-shell" inert aria-busy="true">
+      <!-- Only the parent area has navigation; the child sees Xiaoyu alone (see body[data-mode]). -->
       <header class="topbar">
-        <button
-          class="mobile-menu-button"
-          id="mobileMenuButton"
-          type="button"
-          aria-label="打开菜单"
-          aria-controls="mobileDrawer"
-          aria-expanded="false"
-        >
-          <i data-lucide="menu" aria-hidden="true"></i>
-        </button>
+        <button class="back-to-xiaoyu" id="backToXiaoyu" type="button" data-nav-action="talk" data-view="learn"><i data-lucide="chevron-left" aria-hidden="true"></i><span>回到小宇</span></button>
         <a class="brand" href="./index.html" aria-label="小宇记首页">
           <img src="./assets/xiaoyu-planet.png" alt="" />
           <span>小宇记</span>
         </a>
-        <nav class="topnav" id="desktopNavigation" aria-label="主要功能"></nav>
-        <span class="sr-only" id="connectionStatus" aria-live="polite">可以开始</span>
-        <span class="mobile-header-spacer" aria-hidden="true"></span>
+        <nav class="topnav" id="desktopNavigation" aria-label="家长区"></nav>
       </header>
+      <span class="sr-only" id="connectionStatus" aria-live="polite">可以开始</span>
+      <!-- The way into the parent area from the child's screen: hold for a moment, so a child's tap does nothing. -->
+      <button class="parent-entry" id="parentEntry" type="button" aria-label="家长区（按住进入）">
+        <svg class="parent-entry-ring" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" /></svg>
+        <i data-lucide="user-round" aria-hidden="true"></i>
+      </button>
+      <p class="parent-entry-hint" id="parentEntryHint" role="status" hidden>按住进入家长区</p>
 
       <p id="storageWarning" role="alert" hidden>部分新记录可能尚未保存。请先结束聊天，并到备份记录下载已有档案。</p>
       <p id="durableStorageWarning" role="status" hidden>本机备用保存暂不可用。请到备份记录下载已有档案，不要清理浏览器数据。</p>
@@ -131,31 +129,14 @@
               </div>
             </header>
 
-            <article class="parent-session-panel" id="parentSessionPanel" aria-live="polite">
+            <button class="setting-row parent-setup-row" id="parentSetupRow" type="button" hidden><span>开始设置</span><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+
+            <article class="parent-session-panel" id="parentSessionPanel" aria-live="polite" hidden>
               <div class="parent-session-copy">
-                <h2 id="parentSessionTitle">先认识一下孩子</h2>
-              </div>
-              <div class="session-profile-fields">
-                <label>
-                  孩子昵称
-                  <input id="startChildName" placeholder="例如：安安" />
-                </label>
-                <label>
-                  年龄段
-                  <select id="startAgeBand">
-                    <option value="3-4">3-4 岁</option>
-                    <option value="4-5" selected>4-5 岁</option>
-                    <option value="5-6">5-6 岁</option>
-                    <option value="6-7">6-7 岁</option>
-                  </select>
-                </label>
-                <label class="session-consent">
-                  <input id="startConsent" type="checkbox" />
-                  <span>同意在这台设备保存成长记录</span>
-                </label>
+                <h2 id="parentSessionTitle">正在聊天</h2>
               </div>
               <div class="parent-session-actions">
-                <button class="primary-button" id="startChildSession" type="button">开始聊天</button>
+                <button class="primary-button" id="startChildSession" type="button">回到聊天</button>
                 <button class="text-button" id="endParentSession" type="button" hidden>结束聊天</button>
               </div>
               <p class="session-form-status" id="sessionFormStatus"></p>
@@ -282,62 +263,78 @@
                     </div>
                   </div>
                   <div class="family-member-list" id="familyMemberList"></div>
-                  <form class="family-member-add" id="familyMemberForm">
-                    <input id="familyMemberName" maxlength="24" placeholder="称呼，例如：妈妈" aria-label="家庭成员称呼" />
-                    <select id="familyMemberRole" aria-label="家庭成员身份">
-                      <option value="mother">妈妈</option>
-                      <option value="father">爸爸</option>
-                      <option value="grandparent">祖辈</option>
-                      <option value="caregiver">照护者</option>
-                      <option value="other">其他家人</option>
-                    </select>
-                    <button class="text-button" type="submit">添加</button>
-                  </form>
+                  <button class="setting-row" id="familyAddOpen" type="button"><span>添加家人</span><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+                  <div class="subpage" id="familySubpage" role="dialog" aria-modal="true" aria-labelledby="familySubpageTitle" hidden>
+                    <header class="subpage-bar">
+                      <button class="subpage-back" type="button" data-subpage-close aria-label="返回"><i data-lucide="chevron-left" aria-hidden="true"></i></button>
+                      <h2 id="familySubpageTitle">添加家人</h2>
+                    </header>
+                    <form class="subpage-body" id="familyMemberForm">
+                      <div class="subpage-panel">
+                        <label>称呼<input id="familyMemberName" maxlength="24" placeholder="例如：妈妈" /></label>
+                        <label>身份
+                          <select id="familyMemberRole">
+                            <option value="mother">妈妈</option>
+                            <option value="father">爸爸</option>
+                            <option value="grandparent">祖辈</option>
+                            <option value="caregiver">照护者</option>
+                            <option value="other">其他家人</option>
+                          </select>
+                        </label>
+                      </div>
+                      <p class="profile-save-status" id="familyAddStatus" role="status"></p>
+                      <button class="primary-button" type="submit">添加</button>
+                    </form>
+                  </div>
                   <p class="family-member-status" id="familyMemberStatus" aria-live="polite"></p>
                 </section>
                 <form class="profile-form" id="profileForm">
                   <h2>孩子的资料</h2>
-                  <label>
-                    孩子昵称
-                    <input id="studentName" name="studentName" maxlength="24" placeholder="例如：安安" required aria-describedby="profileSaveStatus" />
-                  </label>
-                  <label>
-                    年龄段
-                    <select id="ageBand" name="ageBand">
-                      <option value="3-4">3-4 岁</option>
-                      <option value="4-5" selected>4-5 岁</option>
-                      <option value="5-6">5-6 岁</option>
-                      <option value="6-7">6-7 岁</option>
-                    </select>
-                  </label>
-                  <details class="profile-extras"><summary>更多陪伴偏好</summary>
-                  <label>
-                    最近喜欢
-                    <input id="interest" name="interest" placeholder="恐龙、汽车、画画、故事..." />
-                  </label>
-                  <label>
-                    最近想多陪伴
-                    <input id="goal" name="goal" placeholder="愿意表达 / 数量感 / 英语词汇" />
-                  </label>
-                  <label>
-                    家长码
-                    <input id="parentPin" name="parentPin" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="保护家长页面" />
-                  </label>
-                  </details>
-                  <label class="checkbox-line">
-                    <input id="consent" name="consent" type="checkbox" role="switch" checked aria-describedby="consentHint" />
-                    保存孩子的成长记录
-                  </label>
-                  <p class="profile-hint" id="consentHint">关闭后仍可聊天，不再保存新记录。</p>
-                  <label class="checkbox-line">
-                    <input id="showSessionSummary" name="showSessionSummary" type="checkbox" role="switch" checked />
-                    结束后显示本次小结
-                  </label>
-                  <div class="profile-save-actions">
-                    <button class="primary-button" id="saveProfile" type="submit">保存资料</button>
-                    <button class="quiet-link" id="clearParentPin" type="button" hidden>清除家长码</button>
+                  <div class="setting-list">
+                    <button class="setting-row" type="button" data-subpage="name"><span>昵称</span><span class="setting-value" data-profile-value="name"></span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+                    <button class="setting-row" type="button" data-subpage="age"><span>年龄</span><span class="setting-value" data-profile-value="age"></span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+                    <button class="setting-row" type="button" data-subpage="prefs"><span>陪伴偏好</span><span class="setting-value" data-profile-value="prefs"></span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+                    <button class="setting-row" type="button" data-subpage="pin"><span>家长码</span><span class="setting-value" data-profile-value="pin"></span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+                    <label class="checkbox-line">
+                      <input id="consent" name="consent" type="checkbox" role="switch" checked aria-describedby="consentHint" />
+                      保存孩子的成长记录
+                    </label>
+                    <p class="profile-hint" id="consentHint">关闭后仍可聊天，不再保存新记录。</p>
+                    <label class="checkbox-line">
+                      <input id="showSessionSummary" name="showSessionSummary" type="checkbox" role="switch" checked />
+                      结束后显示本次小结
+                    </label>
                   </div>
-                  <p class="profile-save-status" id="profileSaveStatus" aria-live="polite"></p>
+                  <p class="profile-save-status" id="profileListStatus" aria-live="polite"></p>
+
+                  <!-- One page per setting, opened from its row -->
+                  <div class="subpage" id="profileSubpage" role="dialog" aria-modal="true" aria-labelledby="profileSubpageTitle" hidden>
+                    <header class="subpage-bar">
+                      <button class="subpage-back" type="button" data-subpage-close aria-label="返回"><i data-lucide="chevron-left" aria-hidden="true"></i></button>
+                      <h2 id="profileSubpageTitle"></h2>
+                    </header>
+                    <div class="subpage-body">
+                      <div class="subpage-panel" data-panel="name">
+                        <input id="studentName" name="studentName" maxlength="24" placeholder="例如：安安" aria-label="孩子昵称" aria-describedby="profileSaveStatus" />
+                      </div>
+                      <div class="subpage-panel choice-cards" data-panel="age" role="radiogroup" aria-label="年龄">
+                        <label><input type="radio" name="ageBand" value="3-4" />3–4 岁</label>
+                        <label><input type="radio" name="ageBand" value="4-5" checked />4–5 岁</label>
+                        <label><input type="radio" name="ageBand" value="5-6" />5–6 岁</label>
+                        <label><input type="radio" name="ageBand" value="6-7" />6–7 岁</label>
+                      </div>
+                      <div class="subpage-panel" data-panel="prefs">
+                        <label>最近喜欢<input id="interest" name="interest" placeholder="恐龙、汽车、画画、故事..." /></label>
+                        <label>最近想多陪伴<input id="goal" name="goal" placeholder="愿意表达 / 数量感 / 英语词汇" /></label>
+                      </div>
+                      <div class="subpage-panel" data-panel="pin">
+                        <input id="parentPin" name="parentPin" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="4 位数字" aria-label="家长码" />
+                        <button class="quiet-link" id="clearParentPin" type="button" hidden>清除家长码</button>
+                      </div>
+                      <p class="profile-save-status" id="profileSaveStatus" aria-live="polite"></p>
+                      <button class="primary-button" id="saveProfile" type="submit">保存</button>
+                    </div>
+                  </div>
                 </form>
               </div>
             </section>
@@ -403,27 +400,86 @@
           <div class="archive-dialog-actions"><button type="button" class="text-button" data-close-archive-dialog autofocus>保留资料</button><button type="submit" class="danger-button">确认清空</button></div>
         </form>
       </dialog>
-      <div class="mobile-drawer" id="mobileDrawer" hidden>
-        <button class="mobile-drawer-backdrop" id="mobileDrawerBackdrop" type="button" aria-label="关闭菜单"></button>
-        <aside class="mobile-drawer-panel" id="mobileDrawerPanel" role="dialog" aria-modal="true" aria-labelledby="mobileDrawerTitle" tabindex="-1">
-          <header class="mobile-drawer-header">
-            <img src="./assets/xiaoyu-planet.png" alt="" />
-            <div>
-              <strong id="mobileDrawerTitle">小宇记</strong>
-              <span id="mobileDrawerProfile">孩子的成长陪伴</span>
-            </div>
-            <button class="mobile-drawer-close" id="mobileDrawerClose" type="button" aria-label="关闭菜单" title="关闭菜单"><i data-lucide="x" aria-hidden="true"></i></button>
-          </header>
-          <nav class="mobile-drawer-nav" id="mobileDrawerNavigation" aria-label="主要功能"></nav>
-          <p class="mobile-drawer-status" id="mobileDrawerStatus" aria-live="polite"></p>
-        </aside>
-      </div>
+      <nav class="parent-tabs" id="parentTabs" aria-label="家长区"></nav>
+
+      <!-- First use: opening → consent → nickname → age → microphone check → hand over to the child.
+           A consent update shows the consent page only. Consent comes before any child data is entered
+           (product framework: guardian consent). The profile is saved after the age page. -->
+      <section class="setup-flow" id="setupFlow" role="dialog" aria-modal="true" aria-labelledby="setupTitle" data-step="opening" hidden>
+        <header class="setup-bar">
+          <button class="subpage-back" id="setupBack" type="button" aria-label="返回"><i data-lucide="chevron-left" aria-hidden="true"></i></button>
+          <ol class="setup-dots" id="setupDots" aria-hidden="true"><li></li><li></li><li></li><li></li></ol>
+        </header>
+        <div class="setup-host" id="setupHost">
+          <div class="setup-xiaoyu" id="setupXiaoyu">
+            <span class="setup-level" aria-hidden="true"></span>
+            <span class="setup-star" id="setupStar" aria-hidden="true"></span>
+          </div>
+          <p class="setup-bubble" id="setupBubble" aria-live="polite"></p>
+        </div>
+        <div class="setup-page" data-setup-step="opening"></div>
+        <div class="setup-page" data-setup-step="consent" hidden>
+          <h2 id="setupTitle">个人信息保护提示</h2>
+          <p class="setup-lead" id="setupLead">请孩子的家长或监护人阅读并确认</p>
+          <ul class="consent-facts" id="consentFacts">
+            <li><i data-lucide="smartphone" aria-hidden="true"></i>聊天和成长记录只保存在这台设备上</li>
+            <li><i data-lucide="cloud" aria-hidden="true"></i>说话的声音和聊天内容会发到云端，用来识别和生成回答；小宇记不保存录音</li>
+            <li><i data-lucide="trash-2" aria-hidden="true"></i>随时可以查看、下载和删除</li>
+          </ul>
+          <p class="setup-status" id="setupConsentStatus" role="status"></p>
+          <div class="setup-actions">
+            <button class="primary-button" id="setupAgree" type="button">同意并继续</button>
+            <button class="quiet-link" id="setupDisagree" type="button">不同意</button>
+          </div>
+        </div>
+        <div class="setup-page" data-setup-step="name" hidden>
+          <input id="setupName" maxlength="24" placeholder="孩子的昵称，例如：安安" autocomplete="off" enterkeyhint="next" aria-label="孩子的昵称" />
+          <div class="setup-actions">
+            <button class="primary-button" id="setupNameNext" type="button" disabled>下一步</button>
+          </div>
+        </div>
+        <div class="setup-page" data-setup-step="age" hidden>
+          <div class="choice-cards" role="radiogroup" aria-label="孩子的年龄">
+            <button type="button" role="radio" aria-checked="false" data-setup-age="3-4">3–4 岁</button>
+            <button type="button" role="radio" aria-checked="false" data-setup-age="4-5">4–5 岁</button>
+            <button type="button" role="radio" aria-checked="false" data-setup-age="5-6">5–6 岁</button>
+            <button type="button" role="radio" aria-checked="false" data-setup-age="6-7">6–7 岁</button>
+          </div>
+          <p class="setup-status" id="setupSaveStatus" role="status"></p>
+        </div>
+        <!-- Microphone check: asks in a tap, reads the level in the page only (no recording, no upload), then closes. -->
+        <div class="setup-page" data-setup-step="mic" hidden>
+          <div class="setup-actions" id="setupMicAsk">
+            <button class="primary-button" id="setupMicAllow" type="button"><i data-lucide="mic" aria-hidden="true"></i>允许麦克风</button>
+            <button class="quiet-link" id="setupMicAskSkip" type="button">跳过</button>
+          </div>
+          <div class="setup-actions" id="setupMicCheck" hidden>
+            <p class="setup-say" id="setupSay">对小宇说一声“你好”</p>
+            <button class="primary-button" id="setupMicDone" type="button" hidden>继续</button>
+            <button class="quiet-link" id="setupMicSkip" type="button">跳过</button>
+          </div>
+          <div class="setup-actions" id="setupMicDenied" hidden>
+            <p class="setup-problem"><i data-lucide="circle-alert" aria-hidden="true"></i>没能打开麦克风</p>
+            <ol class="setup-fix">
+              <li>打开 iPhone 的“设置”</li>
+              <li>找到 Safari 浏览器 → 麦克风</li>
+              <li>选择“允许”，回来再试一次</li>
+            </ol>
+            <button class="primary-button" id="setupMicRetry" type="button">再试一次</button>
+            <button class="quiet-link" id="setupMicLater" type="button">跳过，之后在家庭设置中检查</button>
+          </div>
+        </div>
+        <div class="setup-page" data-setup-step="handover" hidden>
+          <div class="setup-actions">
+            <button class="primary-button setup-big" id="setupHandover" type="button">好了，交给孩子</button>
+          </div>
+        </div>
+      </section>
 
       <div class="parent-lock" id="parentLock" hidden>
         <form class="parent-lock-card" id="parentUnlockForm" role="dialog" aria-modal="true" aria-labelledby="parentLockTitle">
           <img src="./assets/xiaoyu-planet.png" alt="" />
-          <h2 id="parentLockTitle">请大人输入家长码</h2>
-          <p>这里有成长记录和设置。</p>
+          <h2 id="parentLockTitle">请输入家长码</h2>
           <input id="parentUnlockPin" inputmode="numeric" maxlength="4" autocomplete="one-time-code" aria-label="四位家长码" />
           <p class="parent-lock-status" id="parentLockStatus" aria-live="polite"></p>
           <div class="parent-lock-actions">

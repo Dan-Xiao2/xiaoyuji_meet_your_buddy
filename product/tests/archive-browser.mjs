@@ -12,7 +12,7 @@ try {
     const errors=[]; page.on('pageerror', error=>errors.push(error.message));
     await page.route('**/api/**', route=>route.fulfill({status:200,contentType:'application/json',body:'{}'}));
     const state = createInitialState(); state.uiVersion=4;
-    state.profile={...state.profile,name:'测试孩子',configured:true,consent:true};
+    state.profile={...state.profile,name:'测试孩子',configured:true,consent:true,consentVersion:2};
     state.studentModel.profile.nickname='测试孩子';
     state.family=createInitialFamily(state.profile);
     const date=new Date().toISOString();
@@ -27,7 +27,9 @@ try {
       }
     },{state,db});
     const navigate=async(action)=>{
-      if(width<=900) await page.locator('#mobileMenuButton').click();
+      // From the child's screen, the parent button (keyboard activation enters directly) opens the parent area.
+      await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true');
+      if(action!=='talk'&&await page.locator('#parentEntry').isVisible()) await page.locator('#parentEntry').press('Enter');
       await page.locator(`[data-nav-action="${action}"]:visible`).click();
     };
     const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('xiaoyuji-local-student-db-v1')));

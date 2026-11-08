@@ -88,19 +88,25 @@ const indexMarkup = await readFile(new URL("../index.html", import.meta.url), "u
 const componentStyles = await readFile(new URL("../src/styles/components.css", import.meta.url), "utf8");
 const responsiveStyles = await readFile(new URL("../src/styles/responsive.css", import.meta.url), "utf8");
 const desktopNavigationMarkup = createNavigationMarkup("desktop");
-const drawerNavigationMarkup = createNavigationMarkup("drawer");
+const tabNavigationMarkup = createNavigationMarkup("tabs");
+const parentSections = APP_NAV_ITEMS.filter((item) => item.protected);
+// The child's screen has no navigation, only the hold-to-enter parent button; the parent area has
+// the same sections as top tabs (wide) and bottom tabs (phones), plus "back to Xiaoyu".
 if (
-  !indexMarkup.includes('id="mobileMenuButton"') ||
+  !indexMarkup.includes('id="parentEntry"') ||
   !indexMarkup.includes('id="desktopNavigation"') ||
-  !indexMarkup.includes('id="mobileDrawerNavigation"') ||
+  !indexMarkup.includes('id="parentTabs"') ||
+  !indexMarkup.includes('id="backToXiaoyu"') ||
+  indexMarkup.includes('id="mobileMenuButton"') ||
   APP_NAV_ITEMS.length !== 4 ||
-  !APP_NAV_ITEMS.every((item) => desktopNavigationMarkup.includes(item.label) && drawerNavigationMarkup.includes(item.label)) ||
+  parentSections.length !== 3 ||
+  !parentSections.every((item) => desktopNavigationMarkup.includes(item.label) && tabNavigationMarkup.includes(item.label)) ||
+  tabNavigationMarkup.includes("一起聊") ||
   !componentStyles.includes(".app-home") ||
   componentStyles.includes(".desktop-session-gate") ||
   componentStyles.includes(".mobile-app-home") ||
   !responsiveStyles.includes("@media (max-width: 900px)") ||
-  responsiveStyles.includes("@media (max-width: 620px)") ||
-  !responsiveStyles.includes(".mobile-drawer-panel")
+  responsiveStyles.includes("@media (max-width: 620px)")
 ) {
   throw new Error("Expected one shared navigation and home experience across the 900px responsive boundary");
 }

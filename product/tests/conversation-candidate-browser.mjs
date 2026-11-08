@@ -12,7 +12,7 @@ const deferred = () => { let resolve; const promise = new Promise(done => { reso
 function fixture() {
   const state = createInitialState();
   state.uiVersion = 4;
-  state.profile = { ...state.profile, name: "模拟候选家庭", configured: true, consent: true };
+  state.profile = { ...state.profile, name: "模拟候选家庭", configured: true, consent: true, consentVersion: 2 };
   state.session = { id: "candidate-test", status: "active", turnCount: 1 };
   state.messages = [
     { id: "old:child", turnId: "old", role: "child", text: "上次的发现" },

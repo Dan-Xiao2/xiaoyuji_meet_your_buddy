@@ -10,7 +10,7 @@ try {
     const page = await context.newPage(), errors = [];
     page.on("pageerror", e => errors.push(e.message));
     const state = createInitialState(); state.uiVersion = 4;
-    state.profile = { ...state.profile, configured: true, consent: true, name: "同步测试" };
+    state.profile = { ...state.profile, configured: true, consent: true, consentVersion: 2, name: "同步测试" };
     state.family = createInitialFamily(state.profile);
     state.session = { status: "active", id: "timeline-browser", startedAt: new Date().toISOString(), turnCount: 0 };
     await page.addInitScript(s => {

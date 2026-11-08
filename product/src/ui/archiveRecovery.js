@@ -4,7 +4,7 @@ import { LEGACY_ARCHIVE_KEYS } from "../services/archiveIntegrity.js";
 
 export function mountArchiveRecovery(snapshot) {
   document.querySelector(".workspace").hidden = true;
-  document.querySelector("#mobileMenuButton").hidden = true;
+  document.querySelector("#parentEntry").hidden = true;
   const panel = document.querySelector("#archiveRecovery");
   panel.hidden = false;
   const status = panel.querySelector("[role=status]");

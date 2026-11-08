@@ -14,7 +14,7 @@ try {
       return route.fulfill({ contentType: "application/json", body: "{}" });
     });
     const state = createInitialState(); state.uiVersion = 4;
-    state.profile = { ...state.profile, name: "测试家庭", configured: true, consent: true };
+    state.profile = { ...state.profile, name: "测试家庭", configured: true, consent: true, consentVersion: 2 };
     await page.addInitScript(state => {
       if (!localStorage.getItem("xiaoyuji-learning-state-v1")) localStorage.setItem("xiaoyuji-learning-state-v1", JSON.stringify(state));
       window.micTest = { calls: [], tracks: [], contexts: [], fail: "", pending: false, revoked: [] };
@@ -41,7 +41,8 @@ try {
       URL.revokeObjectURL = url => { micTest.revoked.push(url); revoke(url); };
     }, state);
     const nav = async action => {
-      if (width <= 900) await page.locator("#mobileMenuButton").click();
+      await page.waitForFunction(() => document.documentElement.dataset.appReady === "true");
+      if (action !== "talk" && await page.locator("#parentEntry").isVisible()) await page.locator("#parentEntry").press("Enter");
       await page.locator(`[data-nav-action="${action}"]:visible`).click();
     };
     await page.goto(process.env.TEST_URL || "http://localhost:4173/");

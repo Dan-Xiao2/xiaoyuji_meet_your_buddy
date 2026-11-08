@@ -22,7 +22,7 @@ try {
     const gate = deferred(), started = deferred(), errors = [], calls = [];
     const state = createInitialState();
     state.uiVersion = 4;
-    state.profile = { ...state.profile, name: "模拟停止家庭", configured: true, consent: true };
+    state.profile = { ...state.profile, name: "模拟停止家庭", configured: true, consent: true, consentVersion: 2 };
     state.session = { id: "stop-test", status: "active", turnCount: 0 };
     if (["route", "plan", "image"].includes(stage)) state.board = resolveIllustrationPlan("画一个房子", state).board;
     await page.addInitScript(({ state, key }) => {
@@ -86,8 +86,8 @@ try {
         assert.equal((waiting.db.growthMoments || []).length, 0);
       }
       if (action === "navigate") {
-        await page.locator("#mobileMenuButton").click();
-        await page.locator('#mobileDrawer [data-nav-action="parent"]').click();
+        // The parent button is hidden during a chat; drive the parent area's navigation directly.
+        await page.evaluate(() => document.querySelector('#parentTabs [data-nav-action="parent"]').click());
       } else if (action === "hidden") await page.evaluate(() => {
         Object.defineProperty(document, "hidden", { configurable: true, value: true });
         document.dispatchEvent(new Event("visibilitychange"));
@@ -134,8 +134,7 @@ try {
       if (action === "hidden") await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); document.dispatchEvent(new Event("visibilitychange")); });
       if (action === "pagehide") await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
       if (action === "navigate") {
-        await page.locator("#mobileMenuButton").click();
-        await page.locator('#mobileDrawer [data-nav-action="talk"]').click();
+        await page.locator("#backToXiaoyu").click();
       }
       await page.waitForTimeout(300);
       assert.equal((await read()).starts, stopped.starts, "Returning must not automatically reopen microphone");

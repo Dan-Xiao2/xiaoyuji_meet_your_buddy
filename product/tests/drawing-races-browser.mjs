@@ -22,7 +22,7 @@ async function fixture(width, mode, hold) {
   const started = Object.fromEntries(["route", "plan", "image"].map(name => [name, deferred()]));
   const state = createInitialState();
   state.uiVersion = 4;
-  state.profile = { ...state.profile, name: "模拟家庭", configured: true, consent: true };
+  state.profile = { ...state.profile, name: "模拟家庭", configured: true, consent: true, consentVersion: 2 };
   state.family = addFamilyMember(createInitialFamily(state.profile), { name: "模拟家长", role: "mother" });
   state.session = { status: "active", id: "drawing-races", turnCount: 0 };
   state.board = resolveIllustrationPlan("画一个房子", state).board;

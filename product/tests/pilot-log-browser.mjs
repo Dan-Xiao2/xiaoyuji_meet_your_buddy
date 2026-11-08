@@ -12,7 +12,7 @@ try {
   page.on("pageerror", error => errors.push(error.message));
   const state = createInitialState();
   state.uiVersion = 4;
-  state.profile = { ...state.profile, name: "虚构试点家庭", ageBand: "4-5", configured: true, consent: true };
+  state.profile = { ...state.profile, name: "虚构试点家庭", ageBand: "4-5", configured: true, consent: true, consentVersion: 2 };
   state.session = { id: "pilot-log-test", status: "active", turnCount: 0 };
   await page.addInitScript(initial => {
     if (!localStorage.getItem("xiaoyuji-learning-state-v1")) localStorage.setItem("xiaoyuji-learning-state-v1", JSON.stringify(initial));

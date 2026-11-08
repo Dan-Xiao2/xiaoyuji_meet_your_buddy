@@ -13,7 +13,7 @@ try {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     const page = await context.newPage();
     const state = createInitialState(); state.uiVersion = 4;
-    state.profile = { ...state.profile, name: "模拟家庭", configured: true, consent: true };
+    state.profile = { ...state.profile, name: "模拟家庭", configured: true, consent: true, consentVersion: 2 };
     state.family = addFamilyMember(createInitialFamily(state.profile), { name: "模拟家长", role: "mother" });
     const caregiver = state.family.members.find(member => member.role !== "child");
     assert.ok(caregiver);

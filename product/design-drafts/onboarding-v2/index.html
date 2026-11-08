@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>小宇记 · 第一次使用 v2</title>
+  <link rel="stylesheet" href="../../src/styles/design-tokens.css">
+  <link rel="stylesheet" href="../../src/styles/xiaoyu-face.css">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="../../node_modules/lucide/dist/umd/lucide.min.js" defer></script>
+  <script src="./script.js" type="module"></script>
+</head>
+<!-- Prototype: first use with a privacy dialog and an optional login. Nothing typed here is saved or
+     sent; the login buttons only simulate success. The sound check reads the real microphone level in
+     the page only. Brand marks are placeholders; the real ones follow each platform's guidelines. -->
+<body data-step="opening">
+  <aside class="review-bar" aria-label="样板控制">
+    <strong>第一次使用 v2</strong>
+    <span id="loginState">未登录</span>
+    <button type="button" id="openRecords">看成长记录</button>
+    <button type="button" id="restart">重来</button>
+  </aside>
+
+  <main class="onboarding">
+    <header class="top">
+      <button class="back" id="back" type="button" aria-label="上一步" hidden><i data-lucide="chevron-left" aria-hidden="true"></i></button>
+      <ol class="dots" id="dots" aria-label="设置进度" hidden><li></li><li></li><li></li></ol>
+    </header>
+
+    <div class="host">
+      <div class="xiaoyu-wrap" id="xiaoyuWrap">
+        <span class="level-ring" aria-hidden="true"></span>
+        <span data-xiaoyu=""></span>
+        <span class="first-star" id="firstStar" aria-hidden="true"></span>
+      </div>
+      <p class="bubble" id="bubble" aria-live="polite">嗨！我是小宇</p>
+    </div>
+
+    <!-- Login: optional. Phone first; the four other ways in one row; skipping keeps everything on this device. -->
+    <section class="step" data-step="login" hidden>
+      <button class="primary" id="phoneLogin" type="button"><i data-lucide="smartphone" aria-hidden="true"></i>手机号登录</button>
+      <div class="providers" role="group" aria-label="其他登录方式">
+        <button type="button" data-provider="微信"><span class="mark mark-wechat" aria-hidden="true">微</span>微信</button>
+        <button type="button" data-provider="QQ"><span class="mark mark-qq" aria-hidden="true">QQ</span>QQ</button>
+        <button type="button" data-provider="微博"><span class="mark mark-weibo" aria-hidden="true">博</span>微博</button>
+        <button type="button" data-provider="Apple"><span class="mark mark-apple" aria-hidden="true"><i data-lucide="apple"></i></span>Apple</button>
+      </div>
+      <button class="quiet" id="skipLogin" type="button">先不登录</button>
+    </section>
+
+    <!-- Phone number + code (demo: any 6 digits) -->
+    <section class="step" data-step="phone" hidden>
+      <label class="field">手机号
+        <span class="phone-row"><span class="prefix">+86</span><input id="phone" inputmode="numeric" maxlength="11" autocomplete="tel-national" enterkeyhint="next"></span>
+      </label>
+      <label class="field">验证码
+        <span class="code-row"><input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button class="code-send" id="sendCode" type="button" disabled>获取验证码</button></span>
+      </label>
+      <button class="primary" id="phoneNext" type="button" disabled>登录</button>
+    </section>
+
+    <section class="step" data-step="name" hidden>
+      <label class="field">孩子的昵称
+        <input id="name" maxlength="12" autocomplete="off" enterkeyhint="next">
+      </label>
+      <button class="primary" id="nameNext" type="button" disabled>下一步</button>
+    </section>
+
+    <section class="step" data-step="age" hidden>
+      <div class="ages" role="radiogroup" aria-label="年龄">
+        <button type="button" role="radio" aria-checked="false" data-age="3-4">3–4<small>岁</small></button>
+        <button type="button" role="radio" aria-checked="false" data-age="4-5">4–5<small>岁</small></button>
+        <button type="button" role="radio" aria-checked="false" data-age="5-6">5–6<small>岁</small></button>
+        <button type="button" role="radio" aria-checked="false" data-age="6-7">6–7<small>岁</small></button>
+      </div>
+    </section>
+
+    <section class="step" data-step="mic" hidden>
+      <div class="mic-ask" id="micAsk">
+        <button class="primary" id="allowMic" type="button"><i data-lucide="mic" aria-hidden="true"></i>允许麦克风</button>
+      </div>
+      <div class="mic-check" id="micCheck" hidden>
+        <p class="say">对小宇说一声“你好”</p>
+        <button class="primary" id="micDone" type="button" hidden>继续</button>
+        <button class="quiet" id="micSkip" type="button">现在不说</button>
+      </div>
+      <div class="mic-denied" id="micDenied" hidden>
+        <p class="problem"><i data-lucide="circle-alert" aria-hidden="true"></i><span>没能打开麦克风</span></p>
+        <ol class="fix">
+          <li>打开 iPhone 的“设置”</li>
+          <li>找到 Safari 浏览器 → 麦克风</li>
+          <li>选“允许”，回来再试一次</li>
+        </ol>
+        <button class="primary" id="micRetry" type="button">再试一次</button>
+        <button class="quiet" id="micLater" type="button">先跳过，之后在家庭设置里打开</button>
+      </div>
+    </section>
+
+    <section class="step" data-step="handover" hidden>
+      <button class="primary big" id="toChild" type="button">好了，交给孩子</button>
+    </section>
+
+    <section class="step" data-step="child" hidden>
+      <p class="hint">点小宇，和她说说话</p>
+    </section>
+
+    <!-- Growth records (demo), only after login -->
+    <section class="step" data-step="records" hidden>
+      <ul class="records">
+        <li><time>今天</time><span>“月亮会跟着我走吗？”</span></li>
+        <li><time>昨天</time><span>“蚂蚁有没有家？”</span></li>
+        <li><time>11月5日</time><span>“我搭了一座很高的塔”</span></li>
+      </ul>
+      <button class="quiet" id="backToChild" type="button">回到小宇</button>
+    </section>
+  </main>
+
+  <!-- First open: the privacy dialog. Nothing works until it is accepted; no animation, a decision. -->
+  <div class="sheet-backdrop" id="privacy" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+      <h2 id="privacyTitle">欢迎使用小宇记</h2>
+      <ul class="facts">
+        <li><i data-lucide="smartphone" aria-hidden="true"></i>聊天和成长记录保存在这台设备上；登录后才备份到账号</li>
+        <li><i data-lucide="cloud" aria-hidden="true"></i>说话的声音和聊天内容会发到云端，用来识别和生成回答；小宇记不保存录音</li>
+        <li><i data-lucide="trash-2" aria-hidden="true"></i>随时可以查看、下载和删除</li>
+      </ul>
+      <p class="docs">请阅读<a href="#" data-doc>《用户协议》</a><a href="#" data-doc>《隐私政策》</a><a href="#" data-doc>《儿童个人信息保护规则》</a></p>
+      <button class="primary" id="agree" type="button">我是家长，同意并继续</button>
+      <button class="quiet" id="disagree" type="button">不同意</button>
+      <p class="refused" id="refused" hidden>需要家长同意后才能使用小宇记</p>
+    </section>
+  </div>
+
+  <!-- Later: opening records without an account asks to log in -->
+  <div class="sheet-backdrop" id="loginSheet" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="loginSheetTitle">
+      <button class="sheet-close" id="closeLoginSheet" type="button" aria-label="关闭"><i data-lucide="x" aria-hidden="true"></i></button>
+      <h2 id="loginSheetTitle">登录后查看成长记录</h2>
+      <button class="primary" id="sheetPhone" type="button"><i data-lucide="smartphone" aria-hidden="true"></i>手机号登录</button>
+      <div class="providers" role="group" aria-label="其他登录方式">
+        <button type="button" data-provider="微信"><span class="mark mark-wechat" aria-hidden="true">微</span>微信</button>
+        <button type="button" data-provider="QQ"><span class="mark mark-qq" aria-hidden="true">QQ</span>QQ</button>
+        <button type="button" data-provider="微博"><span class="mark mark-weibo" aria-hidden="true">博</span>微博</button>
+        <button type="button" data-provider="Apple"><span class="mark mark-apple" aria-hidden="true"><i data-lucide="apple"></i></span>Apple</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

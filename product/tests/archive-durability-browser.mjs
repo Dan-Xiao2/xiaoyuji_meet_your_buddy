@@ -7,7 +7,7 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
 const url = process.env.TEST_URL || 'http://localhost:4173/';
 const state = createInitialState(); state.uiVersion = 4;
-state.profile = { ...state.profile, name: '耐久测试', configured: true, consent: true };
+state.profile = { ...state.profile, name: '耐久测试', configured: true, consent: true, consentVersion: 2 };
 const db = normalizeLocalStudentDb({ studentModels: { [state.studentModel.studentId]: state.studentModel }, growthMoments: [{
   id: 'durable-one', studentId: state.studentModel.studentId, childQuote: '我喜欢画花', tutorResponse: '一起画吧'
 }] });
@@ -88,7 +88,7 @@ try {
       assert.match(await page.locator('#momentActionStatus').textContent(), /未能保存/);
       assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('xiaoyuji-local-student-db-v1')).growthMoments[0].starred), false);
     }
-    if (action.startsWith('profile')) assert.match(await page.locator('#profileSaveStatus').textContent(), /没能完整保存/);
+    if (action.startsWith('profile')) assert.match(await page.locator('#profileListStatus').textContent(), /没能完整保存/); // saved from the list, so reported there
     if (action === 'observation') {
       assert.equal(await page.locator('#observationNotes').inputValue(), '测试观察仍需保留');
       assert.equal(await page.locator('.observation-drawer').evaluate(el => el.open), true);
@@ -104,10 +104,9 @@ try {
     const { context, page } = await setup({ width });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    if (width <= 900) {
-      await page.locator('#mobileMenuButton').click();
-      await page.locator('#mobileDrawer [data-nav-action=backup]').click();
-    } else await page.locator('#desktopNavigation [data-nav-action=backup]').click();
+    await page.waitForFunction(() => document.documentElement.dataset.appReady === 'true');
+    await page.locator('#parentEntry').press('Enter');
+    await page.locator(`${width <= 900 ? '#parentTabs' : '#desktopNavigation'} [data-nav-action=backup]`).click();
     await page.locator('.memory-settings summary').click();
     const readRaw = () => page.evaluate(() => Object.fromEntries([
       'xiaoyuji-learning-state-v1', 'xiaoyuji-local-student-db-v1', 'xiaoyuji-archive-revision-v1'
@@ -160,7 +159,7 @@ try {
     assert.equal(await dialog.isVisible(), true);
     await dialog.getByRole('button', { name: '确认清空' }).click();
     await dialog.waitFor({ state: 'hidden' });
-    await page.waitForFunction(() => document.activeElement.id === 'startChildName');
+    await page.waitForFunction(() => document.activeElement.id === 'setupAgree');
     const cleared = await readRaw();
     assert.equal(JSON.parse(cleared['xiaoyuji-learning-state-v1']).profile.configured, false);
     assert.equal(cleared['xiaoyuji-local-student-db-v1'], null);
