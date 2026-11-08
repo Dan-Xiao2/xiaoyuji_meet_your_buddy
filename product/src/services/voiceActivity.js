@@ -1,7 +1,8 @@
 export function createVoiceActivityDetector(options = {}) {
   const threshold = numberOption(options.threshold, 0.015);
   const startFrames = numberOption(options.startFrames, 3);
-  const silenceDurationMs = numberOption(options.silenceDurationMs, 1050);
+  const defaultSilenceMs = numberOption(options.silenceDurationMs, 1050);
+  let silenceDurationMs = defaultSilenceMs;
   const idleTimeoutMs = numberOption(options.idleTimeoutMs, 90000);
   const minSpeechMs = numberOption(options.minSpeechMs, 360);
   const maxSpeechMs = numberOption(options.maxSpeechMs, 15000);
@@ -45,7 +46,10 @@ export function createVoiceActivityDetector(options = {}) {
 
   return {
     update,
-    hasSpeech: () => speechStartedAt !== null
+    hasSpeech: () => speechStartedAt !== null,
+    // The silence that ends speech can follow what is being said: shorter after a clear question,
+    // longer mid-thought (see turnSignals.endpointHint); null returns to the usual wait.
+    setSilenceMs: (ms) => { silenceDurationMs = ms != null && Number(ms) > 0 ? Number(ms) : defaultSilenceMs; }
   };
 }
 

@@ -154,3 +154,36 @@ test("the first recognised character is signalled once, without its text, and no
   assert.deepEqual(messages, [{ type: "heard" }]);
   assert.equal(JSON.stringify(messages).includes("草莓"), false, "no partial text leaves the server");
 });
+
+test("while Xiaoyu speaks, her own echo and a short backchannel are not signalled as the child; real words are", async t => {
+  const { client } = await fixture(t);
+  const { ws, upstream } = await client();
+  const messages = []; ws.on("message", raw => messages.push(JSON.parse(raw)));
+  ws.send(JSON.stringify({ type: "speaking", text: "蜗牛背着自己的房子慢慢爬。" }));
+  ws.send(Buffer.from([0, 0, 1, 0])); await tick();
+  const partial = text => upstream.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.text", text }));
+  partial("蜗牛背着自己"); await tick();
+  partial("嗯嗯"); await tick();
+  assert.deepEqual(messages, [], "echo and backchannel do not count");
+  partial("我想看蚂蚁"); await tick();
+  assert.deepEqual(messages, [{ type: "heard" }]);
+  ws.send(JSON.stringify({ type: "finish" })); await tick();
+  const closed = once(ws, "close");
+  upstream.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: "我想看蚂蚁" }));
+  await closed;
+  assert.deepEqual(messages.at(-1).suppressed, { echo: 1, backchannel: 1 });
+  assert.equal(JSON.stringify(messages.slice(0, -1)).includes("蚂蚁"), false, "partial text never reaches the page");
+});
+
+test("the recogniser tells the page when the child sounds finished or mid-thought, without the words", async t => {
+  const { client } = await fixture(t);
+  const { ws, upstream } = await client();
+  const messages = []; ws.on("message", raw => messages.push(JSON.parse(raw)));
+  ws.send(Buffer.from([0, 0, 1, 0])); await tick();
+  const partial = text => upstream.emit("message", JSON.stringify({ type: "conversation.item.input_audio_transcription.text", text }));
+  partial("我看到一只蜗牛然后"); await tick();
+  partial("我看到一只蜗牛然后它跑了吗"); await tick();
+  partial("我看到一只蜗牛然后它跑了吗"); await tick();
+  assert.deepEqual(messages, [{ type: "heard" }, { type: "endpoint", hint: "unfinished" }, { type: "endpoint", hint: "complete" }], "each change once");
+  assert.equal(JSON.stringify(messages).includes("蜗牛"), false);
+});

@@ -2,8 +2,10 @@
 // used in this conversation over same-sounding ones.
 // context: the page's shared AudioContext (see voiceService.js), left open on release; without one
 // a private context is created and closed. Native rate: the worklet converts to 16 kHz itself.
-// onHeard: called once when the recogniser has heard the first character (no text is given).
-export async function createRealtimeCapture(stream, { onTiming, onHeard, corpus = "", context: shared = null } = {}) {
+// onHeard: called once when the recogniser has heard the first character (no text is given); while
+// Xiaoyu speaks (speaking: her reply text), her own echo and a short backchannel do not count.
+// onEndpoint: "complete" / "unfinished" / null as the child sounds finished or mid-thought.
+export async function createRealtimeCapture(stream, { onTiming, onHeard, onEndpoint, corpus = "", speaking = "", context: shared = null } = {}) {
   const context = shared || new AudioContext();
   let node, source, socket, timer, flushTimer, flushResolve;
   let active = false, ready = false, stopped = false, finishing = false, settled = false;
@@ -72,7 +74,11 @@ export async function createRealtimeCapture(stream, { onTiming, onHeard, corpus 
       try { socket = new WebSocket(url); } catch { fail("connect-failed"); return; }
       timer = setTimeout(() => fail("connect-timeout"), 5500);
       socket.onerror = () => fail("connection-failed");
-      socket.onopen = () => { if (!settled && corpus) socket.send(JSON.stringify({ type: "context", text: corpus.slice(0, 2000) })); };
+      socket.onopen = () => {
+        if (settled) return;
+        if (speaking) socket.send(JSON.stringify({ type: "speaking", text: speaking.slice(-600) }));
+        if (corpus) socket.send(JSON.stringify({ type: "context", text: corpus.slice(0, 2000) }));
+      };
       socket.onclose = () => { if (!settled) fail("disconnected"); };
       socket.onmessage = ({ data }) => {
         if (settled) return;
@@ -87,9 +93,11 @@ export async function createRealtimeCapture(stream, { onTiming, onHeard, corpus 
           for (const buffer of pending) append(buffer);
           sendFinish();
         } else if (event.type === "final" && finishing && typeof event.text === "string" && event.text.trim()) {
-          settle({ ok: true, text: event.text.trim(), audioSeconds: event.audioSeconds });
+          settle({ ok: true, text: event.text.trim(), audioSeconds: event.audioSeconds, suppressed: event.suppressed });
         } else if (event.type === "heard") {
           try { onHeard?.(); } catch { /* the page's reaction must not break recognition */ }
+        } else if (event.type === "endpoint") {
+          try { onEndpoint?.(event.hint || null); } catch { /* as above */ }
         } else if (event.type === "error") fail(event.code || "recognition-failed");
       };
     },

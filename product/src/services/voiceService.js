@@ -5,6 +5,10 @@ import { createRealtimeCapture } from "./realtimeAsr.js";
 import { getMicrophoneId, openMicrophone, microphoneError, inputKind, inputCount } from "./microphoneInput.js";
 import { createBargeInDetector, startBargeInMonitor } from "./bargeIn.js";
 
+// Silence that ends a turn, by the recogniser's hint: a clear question is answered sooner, a
+// sentence left hanging (…然后 / …因为) gets more time. No hint keeps the detector's 1.05 s.
+const ENDPOINT_SILENCE_MS = { complete: 550, unfinished: 1800 };
+
 export function createVoiceController() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognitionSupported = Boolean(SpeechRecognition);
@@ -71,11 +75,13 @@ export function createVoiceController() {
   // recogniser hears a character, so a dog's bark or a door does not stop her. Returns false when
   // her current speech is not on the page's output bus (then the interruption stops her at once).
   let duckLevel = 1;
+  // Quieter, not silent, while checking a possible interruption; eased both ways so the change is
+  // not a jump (pilot, 2026-11-08: at 20% with a quick change the volume felt like it jumped).
   function duckPlayback(on) {
-    duckLevel = on ? 0.2 : 1;
+    duckLevel = on ? 0.35 : 1;
     if (!outputBus || !playbackContext) return false;
     const gain = outputBus.gain, now = playbackContext.currentTime;
-    gain.cancelScheduledValues(now); gain.setTargetAtTime(duckLevel, now, 0.04);
+    gain.cancelScheduledValues(now); gain.setTargetAtTime(duckLevel, now, on ? 0.06 : 0.15);
     return Boolean(pcmPlayer);
   }
   let handoffTimer = null;
@@ -230,7 +236,7 @@ export function createVoiceController() {
     } catch { /* Whole-response cloud audio remains available. */ }
   }
 
-  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRecorder = false, preferRealtime = false, asrCorpus = "", noSpeechTimeoutMs }) {
+  function listen({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRecorder = false, preferRealtime = false, asrCorpus = "", speakingText = "", noSpeechTimeoutMs }) {
     stopListening();
     finishRequested = false;
     const requestId = listeningRequestId;
@@ -241,7 +247,7 @@ export function createVoiceController() {
     }
 
     if (preferRecorder && recordingSupported) {
-      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime, asrCorpus, noSpeechTimeoutMs }, requestId);
+      listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime, asrCorpus, speakingText, noSpeechTimeoutMs }, requestId);
       return;
     }
 
@@ -328,7 +334,7 @@ export function createVoiceController() {
     if (recorder && recorder.state !== "inactive") recorder.stop();
   }
 
-  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime = false, asrCorpus = "", noSpeechTimeoutMs }, requestId) {
+  async function listenWithRecorder({ onStart, onResult, onError, onEnd, onIdle, onLevel, onTiming, onProcessing, onHeard, preferRealtime = false, asrCorpus = "", speakingText = "", noSpeechTimeoutMs }, requestId) {
     if (!secureEnough) {
       onError?.("浏览器要求在 localhost 或 HTTPS 页面里使用麦克风。请用本地预览地址打开。");
       return;
@@ -378,7 +384,14 @@ export function createVoiceController() {
     let realtime = null;
     if (preferRealtime) {
       try {
-        realtime = await createRealtimeCapture(stream, { onTiming, onHeard: () => { if (requestId === listeningRequestId) onHeard?.(); }, corpus: asrCorpus, context: sharedAudioContext() });
+        realtime = await createRealtimeCapture(stream, { onTiming, corpus: asrCorpus, speaking: speakingText, context: sharedAudioContext(),
+          onHeard: () => { if (requestId === listeningRequestId) onHeard?.(); },
+          // The recogniser's sense of whether the child is finished adjusts the silence that ends this turn.
+          onEndpoint: hint => {
+            if (requestId !== listeningRequestId) return;
+            activity.setSilenceMs(ENDPOINT_SILENCE_MS[hint]);
+            onTiming?.({ stage: "endpoint-hint", latencyMs: ENDPOINT_SILENCE_MS[hint] ?? 1050, reason: hint || "none" });
+          } });
         if (requestId !== listeningRequestId || finishRequested) {
           realtime.cancel();
           if (requestId === listeningRequestId) { cleanupRecorderOnly(); onEnd?.(""); }
@@ -426,6 +439,10 @@ export function createVoiceController() {
         if (requestId !== listeningRequestId) return;
         realtimeCapture = null;
         onTiming?.({ stage: "asr-realtime-final", latencyMs: window.performance.now() - startedAt, audioSeconds: result.audioSeconds });
+        // Partial recognitions held back from interrupting Xiaoyu: her own echo, or only "嗯 / 对".
+        for (const kind of ["echo", "backchannel"]) {
+          for (let count = 0; count < (result.suppressed?.[kind] || 0) && count < 20; count++) onTiming?.({ stage: `${kind}-suppressed`, latencyMs: 0 });
+        }
         if (result.ok) { onEnd?.(result.text); return; }
         onTiming?.({ stage: "asr-realtime-fallback", latencyMs: 0, reason: result.code });
         onResult?.("连接有点慢，正在重新识别这句话。");
@@ -621,7 +638,16 @@ export function createVoiceController() {
     });
   }
 
+  // What Xiaoyu is saying now (the whole reply, or the sentences of a streamed one so far), so an
+  // interruption check can tell her own voice coming back from the child's.
+  let spokenText = "";
+  function currentSpeechText() {
+    if (delivery && delivery.requestId === speechRequestId) return delivery.texts.join("");
+    return spokenText;
+  }
+
   function speak(text, callbacks = {}) {
+    spokenText = String(text || "");
     if (!text) {
       callbacks.onEnd?.();
       return false;
@@ -956,6 +982,7 @@ export function createVoiceController() {
     speakSentences,
     heardSoFar,
     duckPlayback,
+    currentSpeechText,
     onAudioEvent(listener) { audioEventListener = typeof listener === "function" ? listener : () => {}; },
     watchForBargeIn
   };

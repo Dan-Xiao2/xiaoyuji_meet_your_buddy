@@ -4,7 +4,7 @@
 const STORAGE_KEY = "xiaoyuji-pilot-log-v1";
 const CODE = /^[a-z0-9-]{1,40}$/;
 // Events that belong to the turn in progress rather than starting a new one.
-const SAME_TURN = new Set(["quick-reply", "barge-in-watch", "barge-in-confirmed", "barge-in-dismissed", "audio-device-change", "playback-state"]);
+const SAME_TURN = new Set(["quick-reply", "barge-in-watch", "barge-in-confirmed", "barge-in-dismissed", "barge-in-echo", "barge-in-backchannel", "echo-suppressed", "backchannel-suppressed", "audio-device-change", "playback-state"]);
 const LEVEL_KEYS = ["micPeak", "outPeak", "coupling", "thresholdMin", "bestMargin", "echoCancellation", "echoReduction", "echoDelayMs", "rawPeak", "reopens", "trackMuted", "headset", "inputKind", "inputs"];
 // Fallbacks, and the "did not hear the child" cases: capture errors, no speech, nothing recognised,
 // and interruptions that heard nothing (likely false triggers).

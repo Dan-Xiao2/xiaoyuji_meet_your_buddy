@@ -1,6 +1,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import { randomUUID } from "node:crypto";
 import { deriveDashScopeServiceUrl } from "./qwenSpeech.mjs";
+import { endpointHint, isBackchannel, isEcho } from "../src/features/voice/turnSignals.js";
 
 export function realtimeAsrConfig(env = process.env) {
   const key = String(env.QWEN_API_KEY || "").trim();
@@ -38,6 +39,10 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
     // Recent conversation text sent by the browser before any audio. Passed to the recogniser as
     // context so a word already in the conversation wins over a same-sounding one (牛肝菌, not 牛杆菌).
     let corpus = "", sessionSent = false, heard = false;
+    // While Xiaoyu speaks, the page sends what she is saying, so her own voice coming back through
+    // the speaker and a child's short "嗯 / 对" do not count as an interruption. Counts go to the page.
+    let speaking = "", hint = null;
+    const suppressed = { echo: 0, backchannel: 0 };
     const configure = () => {
       sessionSent = true;
       emit("session.update", { session: { modalities: ["text"], input_audio_format: "pcm", sample_rate: 16000,
@@ -84,13 +89,23 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
         const text = String(event.transcript || "").trim();
         if (!text) { fail("empty-transcript"); return; }
         done = true;
-        send({ type: "final", text, audioSeconds: bytes / 32000 });
+        send({ type: "final", text, audioSeconds: bytes / 32000, suppressed });
         close();
       } else if (event.type === "conversation.item.input_audio_transcription.text") {
         // The first recognised character means a person is speaking (a dog's bark or a door gives
-        // none). Only that signal is passed on, never the partial text: the page uses it to confirm a
-        // voice interruption before stopping Xiaoyu (pilot, 2026-11-02: a dog's bark stopped her).
-        if (!heard && !committed && String(event.text || event.stash || "").trim()) { heard = true; send({ type: "heard" }); }
+        // none). Only signals are passed on, never the partial text: "heard" confirms a voice
+        // interruption before Xiaoyu stops (pilot, 2026-11-02: a dog's bark stopped her), unless the
+        // words are her own reply or only a backchannel; "endpoint" tells the page whether the child
+        // sounds finished or mid-thought.
+        const partial = `${event.text || ""}${event.stash || ""}`.trim();
+        if (!partial || committed) return;
+        if (!heard) {
+          if (speaking && isEcho(partial, speaking)) suppressed.echo++;
+          else if (speaking && isBackchannel(partial)) suppressed.backchannel++;
+          else { heard = true; send({ type: "heard" }); }
+        }
+        const next = endpointHint(partial);
+        if (next !== hint) { hint = next; send({ type: "endpoint", hint }); }
       } else if (event.type === "error" || event.type === "conversation.item.input_audio_transcription.failed") {
         fail("recognition-failed");
       } else if (event.type === "session.finished") {
@@ -100,29 +115,28 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
     });
     client.on("message", (raw, binary) => {
       if (done) return;
-      if (!binary && !ready && !committed) {
+      if (!binary && !committed) {
         let event;
         try { event = JSON.parse(String(raw)); } catch { fail("invalid-request"); return; }
+        if (event.type === "speaking" && typeof event.text === "string") { speaking = event.text.slice(-600); return; }
+        if (ready) {
+          if (event.type !== "finish" || !bytes) { fail("invalid-request"); return; }
+          committed = true;
+          deadline(5000);
+          emit("input_audio_buffer.commit");
+          emit("session.finish");
+          return;
+        }
         if (event.type !== "context" || typeof event.text !== "string" || corpus) { fail("invalid-request"); return; }
         corpus = event.text.trim().slice(0, 2000);
         // Usually the context arrives before the provider connection opens; if not, update the session.
         if (corpus && sessionSent && upstream.readyState === WebSocket.OPEN) configure();
         return;
       }
-      if (!ready || committed) { fail("invalid-state"); return; }
-      if (binary) {
-        bytes += raw.length;
-        if (!raw.length || raw.length % 2 || bytes > 640000 || upstream.bufferedAmount > 128000) { fail("audio-limit"); return; }
-        emit("input_audio_buffer.append", { audio: raw.toString("base64") });
-      } else {
-        let event;
-        try { event = JSON.parse(String(raw)); } catch { fail("invalid-request"); return; }
-        if (event.type !== "finish" || !bytes) { fail("invalid-request"); return; }
-        committed = true;
-        deadline(5000);
-        emit("input_audio_buffer.commit");
-        emit("session.finish");
-      }
+      if (!ready || committed || !binary) { fail("invalid-state"); return; }
+      bytes += raw.length;
+      if (!raw.length || raw.length % 2 || bytes > 640000 || upstream.bufferedAmount > 128000) { fail("audio-limit"); return; }
+      emit("input_audio_buffer.append", { audio: raw.toString("base64") });
     });
   });
   return sockets;

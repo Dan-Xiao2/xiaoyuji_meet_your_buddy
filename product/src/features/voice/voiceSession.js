@@ -1,4 +1,5 @@
 import { joinUtterance, looksUnfinished } from "./utteranceCompletion.js";
+import { isBackchannel, isEcho } from "./turnSignals.js";
 
 // Owns the legacy half-duplex media lifecycle, without DOM or archive access.
 export function createVoiceSession({ voice, getContext, ui, narration, onInput, onTiming, onLevel, trace = () => {}, onChange = () => {}, onBargeIn = () => {},
@@ -15,7 +16,10 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
   let tentative = null, rearmWatch = null;
   // A transcript that stopped mid-thought, waiting for the rest (at most MAX_HOLDS times per turn).
   let heldText = "", holds = 0;
-  const MAX_HOLDS = 2, CONTINUE_WAIT_MS = 4000;
+  // TENTATIVE_WAIT_MS: after Xiaoyu goes quiet for a possible interruption, how long to wait for
+  // someone to start talking before carrying on (pilot, 2026-11-08: a faint sound kept her quiet
+  // for the rest of a reply, up to 12 s, because nothing loud enough to listen to followed).
+  const MAX_HOLDS = 2, CONTINUE_WAIT_MS = 4000, TENTATIVE_WAIT_MS = 1500;
 
   const emit = (type, details = {}) => trace(type, {
     sessionId: getContext().sessionId, captureRevision, playbackRevision, ...details
@@ -153,6 +157,9 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       if (!valid && report) emit("media.callback-rejected", { ...captureIdentity, reason: "stale-media" });
       return valid;
     };
+    // During a tentative interruption, what Xiaoyu is saying, so her own echo and a short "嗯 / 对"
+    // are told apart from the child really starting to talk.
+    const speakingText = provisional ? String(voice.currentSpeechText?.() || "") : "";
     input = "capturing";
     emit("media.capture-started", captureIdentity);
     onChange();
@@ -160,8 +167,9 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       preferRecorder: Boolean(context.cloudTranscription && voice.recordingSupported),
       preferRealtime: Boolean(context.realtimeTranscription),
       asrCorpus: context.asrCorpus || "",
+      speakingText,
       // While waiting for the rest of a held sentence, give up after a short silence.
-      ...(continuing ? { noSpeechTimeoutMs: CONTINUE_WAIT_MS } : {}),
+      ...(continuing ? { noSpeechTimeoutMs: CONTINUE_WAIT_MS } : provisional ? { noSpeechTimeoutMs: TENTATIVE_WAIT_MS } : {}),
       onStart: (details = {}) => {
         if (!live(true)) return;
         if (input !== "capturing") { voice.finishListening(); return; }
@@ -193,9 +201,10 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
       onIdle: () => {
         if (!live(true)) return;
         if (heldText) { release(revision); return; }
+        // Nobody started talking after a possible interruption: a false trigger, and she carries on.
+        if (provisional && tentative) { onTiming({ stage: "barge-in-empty", latencyMs: 0 }); stopCapture(); ui.transcript(""); dismissBargeIn(); return; }
         onTiming({ stage: "capture-idle", latencyMs: 0 });
         if (afterBargeIn) onTiming({ stage: "barge-in-empty", latencyMs: 0 });
-        if (provisional && tentative) { stopCapture(); ui.transcript(""); dismissBargeIn(); return; }
         pause({ detail: "我先等一等，点我继续聊" });
         ui.transcript("");
       },
@@ -211,6 +220,12 @@ export function createVoiceSession({ voice, getContext, ui, narration, onInput, 
           if (afterBargeIn) onTiming({ stage: "barge-in-empty", latencyMs: 0 });
           if (provisional && tentative) { dismissBargeIn(); return; }
           pause(); return;
+        }
+        // Xiaoyu's own words coming back, or only "嗯 / 对": she carries on and nothing is sent.
+        if (provisional && tentative && (isEcho(text, speakingText) || isBackchannel(text))) {
+          onTiming({ stage: isBackchannel(text) ? "barge-in-backchannel" : "barge-in-echo", latencyMs: 0 });
+          dismissBargeIn();
+          return;
         }
         // Recognised text without the early signal (batch recognition): the child it was.
         if (provisional && tentative) confirmBargeIn();
