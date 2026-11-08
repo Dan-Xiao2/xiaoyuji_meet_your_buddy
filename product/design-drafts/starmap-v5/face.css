@@ -1,0 +1,29 @@
+/* Xiaoyu's face (face.js): shared by the prototypes. */
+.xy { display: block; overflow: visible; }
+.xy .xy-eyes-happy, .xy .xy-cheeks, .xy .xy-mouth > * { display: none; }
+.xy .xy-eye, .xy .xy-mouth > *, .xy .xy-eyes-open { transform-box: fill-box; transform-origin: center; }
+.xy .xy-eyes-open { transition: transform .25s ease-out; }
+.xy .xy-eye { transition: transform .09s ease-in; }
+.xy .xy-body { transform-origin: 434px 850px; transition: transform .35s ease-out; }
+.xy[data-face="idle"] .xy-mouth-smile { display: inline; }
+/* Listening: leans in, eyes a little wider, mouth a small "o" */
+.xy[data-face="listening"] .xy-body { transform: rotate(-5deg); }
+.xy[data-face="listening"] .xy-eye { transform: scale(1.12); }
+.xy[data-face="listening"] .xy-mouth-o { display: inline; }
+/* Thinking: looks up and to the side, mouth pressed to one side */
+.xy[data-face="thinking"] .xy-eyes-open { transform: translate(46px, -58px); }
+.xy[data-face="thinking"] .xy-body { transform: rotate(4deg); }
+.xy[data-face="thinking"] .xy-mouth-hmm { display: inline; }
+/* Speaking: the mouth opens and closes */
+.xy[data-face="speaking"] .xy-mouth-talk { display: inline; animation: talk .3s ease-in-out infinite alternate; }
+@keyframes talk { from { transform: scaleY(.35); } to { transform: scaleY(1); } }
+/* Happy: smiling eyes, cheeks and a bigger smile (after answering, greeting the child) */
+.xy[data-face="happy"] .xy-eyes-open { display: none; }
+.xy[data-face="happy"] .xy-eyes-happy, .xy[data-face="happy"] .xy-cheeks { display: inline; }
+.xy[data-face="happy"] .xy-mouth-big { display: inline; }
+/* Blink */
+.xy.is-blinking .xy-eye { transform: scaleY(.1); }
+@media (prefers-reduced-motion: reduce) {
+  .xy .xy-body, .xy .xy-eyes-open, .xy .xy-eye { transition: none !important; }
+  .xy[data-face="speaking"] .xy-mouth-talk { animation: none !important; }
+}

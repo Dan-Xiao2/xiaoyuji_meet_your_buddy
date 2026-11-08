@@ -1,0 +1,179 @@
+/* Prototype v4: chat states, parent gate + bottom tabs, growth "today" card. Shares design tokens. */
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font: var(--xy-body)/1.65 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--xy-ink); background: var(--xy-page); -webkit-font-smoothing: antialiased;
+}
+body[data-backdrop="sky"] .kid { background: linear-gradient(180deg, #e6f3f6 0%, #f4f9f8 55%, #fbf6f0 100%); }
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+.review-bar { position: fixed; z-index: 20; right: 12px; bottom: 12px; display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 999px; background: rgba(23, 63, 59, .9); color: #fff; font-size: 13px; }
+.review-bar select, .review-bar button { font: inherit; font-size: 13px; border-radius: 6px; border: 0; padding: 2px 6px; }
+.review-bar button { background: #fff; color: var(--xy-ink); cursor: pointer; }
+body[data-view="parent"] .review-bar { bottom: calc(84px + env(safe-area-inset-bottom)); }
+
+/* ---- Child side ---- */
+.kid { position: relative; min-height: 100svh; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top)) 20px 40px; }
+.parent-gate { z-index: 2; position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px 0 10px; border: 0; border-radius: 999px; background: rgba(255,255,255,.7); color: var(--xy-muted); font-size: 14px; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+.parent-gate svg[data-lucide], .parent-gate .lucide { width: 18px; height: 18px; }
+.gate-ring { position: absolute; left: 4px; width: 36px; height: 36px; transform: rotate(-90deg); fill: none; stroke: var(--xy-ink); stroke-width: 2.5; stroke-dasharray: 100.5; stroke-dashoffset: 100.5; pointer-events: none; }
+.parent-gate.is-holding .gate-ring { transition: stroke-dashoffset 1.2s linear; stroke-dashoffset: 0; }
+.gate-hint { position: absolute; top: calc(max(16px, env(safe-area-inset-top)) + 50px); right: 16px; margin: 0; font-size: 13px; color: var(--xy-muted); }
+
+.stage { display: grid; justify-items: center; gap: 20px; width: min(100%, 34rem); }
+.xiaoyu { position: relative; width: 232px; height: 232px; padding: 0; border: 0; border-radius: 50%; background: var(--xy-sky); cursor: pointer; }
+.xiaoyu .xy { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; }
+.level-ring { position: absolute; inset: 0; border-radius: 50%; background: rgba(243, 154, 85, .22); transform: scale(var(--level, 1)); transition: transform 80ms linear, opacity .2s; opacity: 0; }
+.state-word { font-size: 20px; font-weight: 600; }
+.thinking-dots { display: flex; gap: 8px; height: 10px; opacity: 0; }
+.thinking-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--xy-muted); }
+
+.stage[data-state="listening"] .level-ring { opacity: 1; }
+.stage[data-state="thinking"] .thinking-dots { opacity: 1; }
+.stage[data-state="thinking"] .thinking-dots i { animation: dot 1.2s infinite ease-in-out; }
+.stage[data-state="thinking"] .thinking-dots i:nth-child(2) { animation-delay: .15s; }
+.stage[data-state="thinking"] .thinking-dots i:nth-child(3) { animation-delay: .3s; }
+.stage[data-state="speaking"] .xiaoyu .xy { animation: sway 1.6s infinite ease-in-out; }
+@keyframes dot { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-6px); opacity: 1; } }
+@keyframes sway { 0%, 100% { transform: rotate(-3deg) translateY(0); } 50% { transform: rotate(3deg) translateY(-4px); } }
+
+/* Space is kept for the captions, so Xiaoyu does not move when they appear (DESIGN.md). */
+.captions { width: 100%; min-height: 6.5em; display: grid; align-content: start; gap: 8px; font-size: var(--xy-caption); line-height: 1.5; }
+.captions.is-empty { visibility: hidden; }
+.captions p { margin: 0; }
+.caption-child { padding-left: 12px; border-left: 2px solid var(--xy-line); color: var(--xy-muted); }
+
+/* ---- Parent side ---- */
+.parent { min-height: 100svh; padding: max(12px, env(safe-area-inset-top)) 20px calc(88px + env(safe-area-inset-bottom)); background: var(--xy-page); }
+.parent-top { display: flex; min-height: 48px; align-items: center; }
+.back-to-kid { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 8px 0 0; border: 0; background: none; color: var(--xy-muted); font-size: 15px; cursor: pointer; }
+.tab-panel { width: min(100%, 40rem); margin: 0 auto; }
+h1 { margin: 8px 0 20px; font-size: var(--xy-heading); line-height: 1.3; }
+h2 { margin: 32px 0 12px; font-size: var(--xy-section); line-height: 1.4; }
+
+.today-card { padding: 20px; border-radius: 16px; background: #fff; box-shadow: 0 1px 2px rgba(23,63,59,.06), 0 8px 24px rgba(23,63,59,.06); }
+.today-card time { font-size: var(--xy-caption); color: var(--xy-muted); }
+.today-card blockquote { margin: 8px 0 16px; font-size: 22px; line-height: 1.45; font-weight: 600; }
+.topics { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.topics li { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: var(--xy-sky); font-size: 14px; }
+.topics svg { width: 16px; height: 16px; }
+.today-note { margin: 0; color: var(--xy-muted); font-size: 15px; }
+
+.days { margin: 0; padding: 0; list-style: none; display: grid; gap: 20px; }
+.days time { display: block; margin-bottom: 8px; font-size: var(--xy-caption); color: var(--xy-muted); }
+.moment { display: flex; gap: 12px; align-items: flex-start; padding: 14px 0; border-top: 1px solid var(--xy-line); }
+.moment > svg { flex: none; width: 22px; height: 22px; margin-top: 2px; color: #b8642a; }
+.moment p { margin: 0; }
+.moment span { font-size: 13px; color: var(--xy-muted); }
+
+.rows { margin: 0 0 20px; padding: 0; list-style: none; border-radius: 14px; background: #fff; overflow: hidden; }
+.rows li + li { border-top: 1px solid var(--xy-line); }
+.row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; border: 0; background: none; text-align: left; cursor: pointer; }
+.row > svg { flex: none; width: 20px; height: 20px; color: var(--xy-muted); }
+.row-main { flex: 1; display: grid; }
+.row-main small { font-size: 13px; color: var(--xy-muted); }
+.avatar { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: #fbe3cf; font-weight: 600; }
+.row input[role="switch"] { appearance: none; width: 48px; height: 28px; margin: 0; border-radius: 20px; background: #d5ddd9; position: relative; cursor: pointer; }
+.row input[role="switch"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: left .15s; }
+.row input[role="switch"]:checked { background: var(--xy-ink); }
+.row input[role="switch"]:checked::after { left: 23px; }
+
+.backup-count { margin: 0 0 16px; color: var(--xy-muted); }
+.backup-count strong { font-size: 32px; color: var(--xy-ink); margin-right: 4px; }
+.primary { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 20px; margin-bottom: 24px; border: 0; border-radius: 10px; background: var(--xy-ink); color: #fff; cursor: pointer; }
+.primary svg { width: 20px; height: 20px; }
+
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.96); border-top: 1px solid var(--xy-line); }
+.tabbar button { display: grid; justify-items: center; gap: 2px; min-height: 56px; padding: 6px 0; border: 0; background: none; color: var(--xy-muted); font-size: 12px; cursor: pointer; }
+.tabbar svg { width: 24px; height: 24px; }
+.tabbar [aria-selected="true"] { color: var(--xy-ink); font-weight: 600; }
+
+:focus-visible { outline: 3px solid #f39a55; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .stage[data-state] .xiaoyu .xy, .thinking-dots i { animation: none !important; }
+  .level-ring, .gate-ring { transition: none !important; }
+}
+@media (min-width: 901px) {
+  .tabbar { left: 50%; right: auto; width: 420px; transform: translateX(-50%); bottom: 16px; border: 1px solid var(--xy-line); border-radius: 16px; }
+}
+
+/* ---- Opening ---- */
+.launch, .welcome { position: fixed; inset: 0; z-index: 10; overflow: hidden; display: grid; place-content: center; justify-items: center; gap: 20px; padding: 20px; background: linear-gradient(180deg, #e6f3f6 0%, #f4f9f8 55%, #fbf6f0 100%); }
+body[data-backdrop="neutral"] .launch, body[data-backdrop="neutral"] .welcome { background: var(--xy-page); }
+.launch-xiaoyu { width: 200px; height: 200px; border-radius: 50%; background: var(--xy-sky); }
+/* The opening places Xiaoyu and the greeting exactly where the chat screen has Xiaoyu and its state word. */
+.launch { display: block; }
+.launch .launch-xiaoyu { position: absolute; left: var(--x-left); top: var(--x-top); width: var(--x-size); height: var(--x-size); animation: rise .6s cubic-bezier(.2, 1.4, .4, 1) both; }
+.launch-greeting { position: absolute; left: 0; right: 0; top: var(--w-top); margin: 0; text-align: center; font-size: 20px; line-height: var(--w-line); font-weight: 600; animation: fade-up .4s .45s ease-out both; }
+.launch.is-leaving { animation: fade-out .35s ease-in both; }
+.launch.is-leaving .launch-xiaoyu { animation: none; }
+.welcome .launch-xiaoyu { animation: rise .6s cubic-bezier(.2, 1.4, .4, 1) both; }
+.welcome h1 { margin: 0; font-size: 32px; animation: fade-up .4s .4s ease-out both; }
+.welcome-start { min-width: 12rem; justify-content: center; margin: 12px 0 0; animation: fade-up .4s .55s ease-out both; }
+@keyframes rise { from { transform: translateY(60vh) scale(.8); } to { transform: none; } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fade-out { to { opacity: 0; } }
+/* Xiaoyu arrives in the chat screen in the same place the opening left her. */
+.kid.is-arriving .stage { animation: fade-up .3s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .launch, .launch *, .welcome, .welcome *, .kid.is-arriving .stage { animation: none !important; }
+}
+
+/* ===== v5: 小小宇宙. Stars live only in the growth star map, one per discovery ===== */
+/* Rounded type: a subset Chinese rounded font would go first here once licensed and built. */
+body { font-family: "XY Rounded", ui-rounded, "PingFang SC", system-ui, -apple-system, "Microsoft YaHei", sans-serif; }
+:root { --dawn: linear-gradient(180deg, #6f9bb6 0%, #a9cadb 26%, #dcebee 52%, #f7eee3 80%, #fbe3cc 100%); }
+/* Background: halfway between the deep dawn (晨空) and v4's pale sky (浅天空), no stars. */
+:root { --between: linear-gradient(180deg, #aac7d6 0%, #cbe0e9 26%, #e7f2f3 52%, #f7f2eb 80%, #fbecde 100%); }
+body[data-backdrop="between"] .kid, body[data-backdrop="between"] .launch, body[data-backdrop="between"] .welcome { background: var(--between); }
+body[data-backdrop="dawn"] .kid, body[data-backdrop="dawn"] .launch, body[data-backdrop="dawn"] .welcome { background: var(--dawn); }
+
+/* Growth: the star map */
+.starmap { margin: 0 0 20px; padding: 16px 12px 10px; border-radius: 20px; background: linear-gradient(180deg, #23465a 0%, #35607a 55%, #6d8fa3 100%); color: #e8f1f2; }
+.starmap svg { display: block; width: 100%; height: auto; overflow: visible; }
+.starmap figcaption { display: flex; justify-content: space-between; padding: 6px 6px 0; font-size: 12px; opacity: .8; }
+.star { cursor: pointer; }
+.star circle.glow { fill: rgba(255, 217, 168, .25); }
+.star circle.core { fill: #fff3df; }
+.star.is-today circle.core { fill: #ffd9a8; }
+.star.is-selected circle.glow { fill: rgba(255, 217, 168, .55); }
+.star:focus-visible { outline: none; }
+.star:focus-visible circle.glow { stroke: #f39a55; stroke-width: 2; }
+.constellation { stroke: rgba(232, 241, 242, .28); stroke-width: 1; fill: none; }
+
+.moment-card { padding: 20px; border-radius: 16px; background: #fff; box-shadow: 0 1px 2px rgba(23,63,59,.06), 0 8px 24px rgba(23,63,59,.06); }
+.moment-card time { font-size: var(--xy-caption); color: var(--xy-muted); }
+.moment-card blockquote { margin: 8px 0 14px; font-size: 22px; line-height: 1.45; font-weight: 600; }
+.moment-card .topic { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.moment-card p { margin: 12px 0 0; color: var(--xy-muted); font-size: 15px; }
+
+/* Topic patterns: a stable 5×5 mark and colour per topic (seeded), so 蜗牛 always looks like 蜗牛. */
+.pattern { flex: none; width: 28px; height: 28px; border-radius: 8px; padding: 4px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--tint); }
+.pattern b { border-radius: 1px; background: var(--ink-tone); }
+.pattern b.off { background: transparent; }
+.moment > .pattern { margin-top: 2px; }
+
+/* ---- Tab bar feedback ---- */
+.tabbar { isolation: isolate; }
+.tab-indicator { position: absolute; z-index: -1; top: 6px; left: 8px; width: calc((100% - 16px) / 3); height: 56px; border-radius: 14px; background: #e6f0ec; transform: translateX(calc(var(--i, 0) * 100%)); transition: transform .3s cubic-bezier(.3, 1.3, .5, 1); }
+.tabbar button { position: relative; transition: transform .12s ease-out, color .2s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.tabbar button.is-pressed { transform: scale(.9); }
+.tabbar button svg { transition: transform .2s; }
+@media (hover: hover) { .tabbar button:not([aria-selected="true"]):hover { color: var(--xy-ink); } .tabbar button:not([aria-selected="true"]):hover svg { transform: translateY(-2px); } }
+/* Each icon moves once, in its own way, when its tab is chosen. */
+.tabbar [data-tab="growth"].is-arriving svg { transform-origin: 50% 100%; animation: sprout .45s ease-out; }
+.tabbar [data-tab="family"].is-arriving svg { animation: hop .4s ease-out; }
+.tabbar [data-tab="backup"].is-arriving svg { transform-origin: 30% 100%; animation: tilt .45s ease-out; }
+@keyframes sprout { 0% { transform: scaleY(.55) translateY(3px); } 60% { transform: scaleY(1.15); } 100% { transform: none; } }
+@keyframes hop { 0% { transform: none; } 40% { transform: translateY(-5px); } 70% { transform: translateY(1px); } 100% { transform: none; } }
+@keyframes tilt { 0% { transform: none; } 35% { transform: rotate(-12deg); } 70% { transform: rotate(5deg); } 100% { transform: none; } }
+.tab-panel.is-entering { animation: panel-in .22s ease-out; }
+@keyframes panel-in { from { opacity: 0; transform: translateX(var(--from, 16px)); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .tab-indicator, .tabbar button, .tabbar button svg { transition: none !important; }
+  .tabbar .is-arriving svg, .tab-panel.is-entering { animation: none !important; }
+}
+
+

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小宇形象 · 改法对比</title>
+<link rel="stylesheet" href="../../src/styles/design-tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px 40px; font: 15px/1.6 system-ui, -apple-system, "PingFang SC", sans-serif; color: var(--xy-ink); background: #f4f7f6; }
+  h1 { margin: 0 0 16px; font-size: 22px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+  figure { margin: 0; padding: 16px; border-radius: 16px; background: #fff; display: grid; justify-items: center; gap: 10px; }
+  figure .big { width: 140px; height: 140px; }
+  .sizes { display: flex; align-items: end; gap: 10px; }
+  .sizes svg:nth-child(1) { width: 56px; height: 56px; }
+  .sizes svg:nth-child(2) { width: 32px; height: 32px; }
+  figcaption { text-align: center; }
+  figcaption strong { display: block; }
+  figcaption span { font-size: 13px; color: var(--xy-muted); }
+  svg { display: block; }
+</style>
+</head>
+<!-- Design exploration only. The current A1 image is kept unchanged in assets/. -->
+<body>
+  <h1>小宇形象 · 改法对比</h1>
+  <div class="grid" id="grid"></div>
+<script type="module">
+const ORANGE = "#f2a061", TEAL = "#27534c", SKY = "#d5e7f0";
+const face = (cx, cy, s = 1) => `
+  <ellipse cx="${cx - 74 * s}" cy="${cy}" rx="${24 * s}" ry="${27 * s}" fill="${TEAL}" />
+  <ellipse cx="${cx + 74 * s}" cy="${cy}" rx="${24 * s}" ry="${27 * s}" fill="${TEAL}" />
+  <path d="M${cx - 32 * s} ${cy + 40 * s} Q${cx} ${cy + 74 * s} ${cx + 32 * s} ${cy + 40 * s}" fill="none" stroke="${TEAL}" stroke-width="${14 * s}" stroke-linecap="round" />`;
+const cheeks = (cx, cy) => `<ellipse cx="${cx - 128}" cy="${cy + 42}" rx="30" ry="18" fill="#ee8760" /><ellipse cx="${cx + 128}" cy="${cy + 42}" rx="30" ry="18" fill="#ee8760" />`;
+
+// A planet ring that goes round the body: the back half is drawn behind it, the front half over it.
+function ring({ cx = 500, cy = 560, rx = 430, ry = 110, tilt = -14, color = TEAL, width = 40 }, part) {
+  const clip = part === "front" ? `<clipPath id="front-${cx}-${cy}-${tilt}-${color.slice(1)}"><rect x="${cx - rx - 60}" y="${cy}" width="${2 * rx + 120}" height="${ry + 80}" /></clipPath>` : "";
+  const clipUse = part === "front" ? ` clip-path="url(#front-${cx}-${cy}-${tilt}-${color.slice(1)})"` : "";
+  return `<g transform="rotate(${tilt} ${cx} ${cy})">${clip}<ellipse${clipUse} cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" /></g>`;
+}
+const frame = (inner) => `<svg viewBox="0 0 1000 1000"><defs><clipPath id="f"><circle cx="500" cy="500" r="500" /></clipPath></defs><g clip-path="url(#f)"><rect width="1000" height="1000" fill="${SKY}" />${inner}</g></svg>`;
+
+const VARIANTS = [
+  { name: "现在（A1）", note: "宽带在身体里，像蜜蜂条纹", svg: `<svg viewBox="0 0 1254 1254"><defs><clipPath id="a1f"><circle cx="627" cy="627" r="627" /></clipPath><clipPath id="a1p"><circle cx="434" cy="850" r="556" /></clipPath></defs><g clip-path="url(#a1f)"><rect width="1254" height="1254" fill="${SKY}" /><circle cx="434" cy="850" r="556" fill="${ORANGE}" /><path clip-path="url(#a1p)" fill="${TEAL}" d="M-20 1057 C 380 1032 790 962 1000 735 L 1010 945 C 860 1082 480 1192 -20 1198 Z" /><ellipse cx="305" cy="700" rx="47" ry="50" fill="${TEAL}" /><ellipse cx="683" cy="662" rx="47" ry="50" fill="${TEAL}" /><path d="M451 725 Q497 788 548 717" fill="none" stroke="${TEAL}" stroke-width="22" stroke-linecap="round" /></g></svg>` },
+  { name: "A 环伸出身体", note: "细环绕过身体，后半圈被挡住", svg: frame(`${ring({}, "back")}<circle cx="500" cy="540" r="290" fill="${ORANGE}" />${face(500, 480, 1.3)}${cheeks(500, 500)}${ring({}, "front")}`) },
+  { name: "B 环 + 浅色坑点", note: "加两三个浅色圆坑，表面更像星球", svg: frame(`${ring({}, "back")}<circle cx="500" cy="540" r="290" fill="${ORANGE}" /><circle cx="345" cy="380" r="34" fill="#f6bd8c" /><circle cx="672" cy="372" r="20" fill="#f6bd8c" /><circle cx="618" cy="640" r="26" fill="#f6bd8c" />${face(500, 480, 1.3)}${cheeks(500, 500)}${ring({}, "front")}`) },
+  { name: "C 环 + 小卫星", note: "多一颗小卫星，像跟着小宇的小伙伴", svg: frame(`${ring({ tilt: -14 }, "back")}<circle cx="500" cy="560" r="280" fill="${ORANGE}" />${face(500, 500, 1.3)}${cheeks(500, 520)}${ring({ tilt: -14 }, "front")}<circle cx="820" cy="250" r="54" fill="#ffe0b3" /><circle cx="806" cy="242" r="7" fill="${TEAL}" /><circle cx="834" cy="242" r="7" fill="${TEAL}" />`) },
+  // D keeps A1's composition (a big Xiaoyu peeking in from the bottom left) but the band becomes a ring
+  // that leaves the body on the right and passes behind it: the planet reading without losing A1.
+  { name: "D 保留 A1 构图 + 环伸出", note: "大脸从左下探头，环从身体右侧伸出去", svg: frame(`
+      <g transform="rotate(-18 360 700)"><ellipse cx="360" cy="700" rx="600" ry="150" fill="none" stroke="${TEAL}" stroke-width="58" /></g>
+      <circle cx="360" cy="680" r="440" fill="${ORANGE}" />
+      <g transform="rotate(-18 360 700)"><clipPath id="d-front"><rect x="-300" y="700" width="1400" height="260" /></clipPath><ellipse clip-path="url(#d-front)" cx="360" cy="700" rx="600" ry="150" fill="none" stroke="${TEAL}" stroke-width="58" /></g>
+      ${face(380, 520, 1.6)}<ellipse cx="190" cy="600" rx="36" ry="22" fill="#ee8760" /><ellipse cx="570" cy="600" rx="36" ry="22" fill="#ee8760" />`) }
+];
+document.querySelector("#grid").innerHTML = VARIANTS.map(v => `<figure>
+  <div class="big">${v.svg}</div>
+  <div class="sizes">${v.svg}${v.svg}</div>
+  <figcaption><strong>${v.name}</strong><span>${v.note}</span></figcaption></figure>`).join("");
+for (const svg of document.querySelectorAll(".big svg")) svg.setAttribute("width", "140");
+</script>
+</body>
+</html>

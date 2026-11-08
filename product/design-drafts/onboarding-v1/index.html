@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>小宇记 · 第一次使用</title>
+  <link rel="stylesheet" href="../../src/styles/design-tokens.css">
+  <link rel="stylesheet" href="../starmap-v5/face.css">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="../../node_modules/lucide/dist/umd/lucide.min.js" defer></script>
+  <script src="./script.js" type="module"></script>
+</head>
+<!-- Prototype: first use. Nothing typed here is saved. The sound check asks for the real microphone
+     but only reads its level in the page; nothing is recorded or uploaded. -->
+<body data-step="opening">
+  <aside class="review-bar" aria-label="样板控制"><strong>第一次使用</strong><button type="button" id="restart">重来</button></aside>
+
+  <main class="onboarding">
+    <header class="top">
+      <button class="back" id="back" type="button" aria-label="上一步" hidden><i data-lucide="chevron-left" aria-hidden="true"></i></button>
+      <ol class="dots" id="dots" aria-label="设置进度" hidden><li></li><li></li><li></li><li></li></ol>
+    </header>
+
+    <div class="host">
+      <div class="xiaoyu-wrap" id="xiaoyuWrap">
+        <span class="level-ring" aria-hidden="true"></span>
+        <span data-xiaoyu=""></span>
+        <span class="first-star" id="firstStar" aria-hidden="true"></span>
+      </div>
+      <p class="bubble" id="bubble" aria-live="polite">嗨！我是小宇</p>
+    </div>
+
+    <!-- 1 Nickname -->
+    <section class="step" data-step="name" hidden>
+      <label class="field">孩子的昵称
+        <input id="name" maxlength="12" autocomplete="off" enterkeyhint="next">
+      </label>
+      <button class="primary" id="nameNext" type="button" disabled>下一步</button>
+    </section>
+
+    <!-- 2 Age: one tap chooses and moves on -->
+    <section class="step" data-step="age" hidden>
+      <div class="ages" role="radiogroup" aria-label="年龄">
+        <button type="button" role="radio" aria-checked="false" data-age="3-4">3–4<small>岁</small></button>
+        <button type="button" role="radio" aria-checked="false" data-age="4-5">4–5<small>岁</small></button>
+        <button type="button" role="radio" aria-checked="false" data-age="5-6">5–6<small>岁</small></button>
+        <button type="button" role="radio" aria-checked="false" data-age="6-7">6–7<small>岁</small></button>
+      </div>
+    </section>
+
+    <!-- 3 Consent: three facts, one decision; deliberately no animation -->
+    <section class="step" data-step="consent" hidden>
+      <ul class="facts">
+        <li><i data-lucide="smartphone" aria-hidden="true"></i>聊天和成长记录只保存在这台设备上</li>
+        <li><i data-lucide="cloud" aria-hidden="true"></i>声音会发到云端转成文字，不保存录音</li>
+        <li><i data-lucide="trash-2" aria-hidden="true"></i>随时可以查看、下载和删除</li>
+      </ul>
+      <button class="primary" id="agree" type="button">同意并继续</button>
+    </section>
+
+    <!-- 4 Microphone, then a sound check -->
+    <section class="step" data-step="mic" hidden>
+      <div class="mic-ask" id="micAsk">
+        <button class="primary" id="allowMic" type="button"><i data-lucide="mic" aria-hidden="true"></i>允许麦克风</button>
+      </div>
+      <div class="mic-check" id="micCheck" hidden>
+        <p class="say">对小宇说一声“你好”</p>
+        <button class="primary" id="micDone" type="button" hidden>继续</button>
+        <button class="quiet" id="micSkip" type="button">现在不说</button>
+      </div>
+      <div class="mic-denied" id="micDenied" hidden>
+        <p class="problem"><i data-lucide="circle-alert" aria-hidden="true"></i><span>没能打开麦克风</span></p>
+        <ol class="fix">
+          <li>打开 iPhone 的“设置”</li>
+          <li>找到 Safari 浏览器 → 麦克风</li>
+          <li>选“允许”，回来再试一次</li>
+        </ol>
+        <button class="primary" id="micRetry" type="button">再试一次</button>
+        <button class="quiet" id="micLater" type="button">先跳过，之后在家庭设置里打开</button>
+      </div>
+    </section>
+
+    <!-- 5 Hand over to the child -->
+    <section class="step" data-step="handover" hidden>
+      <button class="primary big" id="toChild" type="button">好了，交给孩子</button>
+    </section>
+
+    <!-- 6 The child's first moment: Xiaoyu starts the conversation -->
+    <section class="step" data-step="child" hidden>
+      <p class="hint">点小宇，和她说说话</p>
+    </section>
+  </main>
+</body>
+</html>

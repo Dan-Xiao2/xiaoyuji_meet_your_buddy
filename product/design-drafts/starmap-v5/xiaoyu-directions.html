@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小宇形象 · 新方向</title>
+<link rel="stylesheet" href="../../src/styles/design-tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px 40px; font: 15px/1.6 system-ui, -apple-system, "PingFang SC", sans-serif; color: var(--xy-ink); background: #f4f7f6; }
+  h1 { margin: 0 0 16px; font-size: 22px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
+  figure { margin: 0; padding: 16px; border-radius: 16px; background: #fff; display: grid; justify-items: center; gap: 10px; }
+  .big { width: 150px; height: 150px; }
+  .pair { display: flex; gap: 10px; }
+  .pair .mid { width: 72px; height: 72px; }
+  .sizes { display: flex; align-items: end; gap: 10px; }
+  .sizes > div:nth-child(1) { width: 48px; height: 48px; }
+  .sizes > div:nth-child(2) { width: 32px; height: 32px; }
+  figcaption { text-align: center; }
+  figcaption strong { display: block; }
+  figcaption span { font-size: 13px; color: var(--xy-muted); }
+  svg { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<!-- Design exploration only (demo art). The product still uses assets/xiaoyu-planet.png (A1). -->
+<body>
+  <h1>小宇形象 · 新方向</h1>
+  <div class="grid" id="grid"></div>
+<script type="module">
+// Shared rules for all four: no thick dark ring (the dark teal is only for eyes and mouth), a face
+// that fills more of the body with big, low, wide-set eyes and highlights (baby-schema proportions),
+// soft cheeks, and the planet shown by something other than a stripe.
+const ORANGE = "#f2a061", TEAL = "#27534c", SKY = "#d5e7f0", CREAM = "#fff1dc", CRATER = "#f7bd8a", CHEEK = "#f08a66", STAR = "#ffcf5c";
+let n = 0;
+const frame = (inner) => { const id = `f${n++}`; return `<svg viewBox="0 0 1000 1000"><defs><clipPath id="${id}"><circle cx="500" cy="500" r="500" /></clipPath></defs><g clip-path="url(#${id})"><rect width="1000" height="1000" fill="${SKY}" />${inner}</g></svg>`; };
+
+function eyes(cx, cy, { gap = 104, rx = 44, ry = 50, happy = false } = {}) {
+  if (happy) return [-1, 1].map(side => `<path d="M${cx + side * gap - 40} ${cy + 12} Q${cx + side * gap} ${cy - 40} ${cx + side * gap + 40} ${cy + 12}" fill="none" stroke="${TEAL}" stroke-width="22" stroke-linecap="round" />`).join("");
+  return [-1, 1].map(side => `<ellipse cx="${cx + side * gap}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${TEAL}" /><circle cx="${cx + side * gap + 13}" cy="${cy - 17}" r="13" fill="#fff" />`).join("");
+}
+const mouth = (cx, cy, happy) => happy
+  ? `<path d="M${cx - 44} ${cy - 6} Q${cx} ${cy + 56} ${cx + 44} ${cy - 6}" fill="${TEAL}" />`
+  : `<path d="M${cx - 30} ${cy} Q${cx} ${cy + 30} ${cx + 30} ${cy}" fill="none" stroke="${TEAL}" stroke-width="16" stroke-linecap="round" />`;
+const cheeks = (cx, cy, gap = 178) => `<ellipse cx="${cx - gap}" cy="${cy}" rx="44" ry="26" fill="${CHEEK}" opacity=".7" /><ellipse cx="${cx + gap}" cy="${cy}" rx="44" ry="26" fill="${CHEEK}" opacity=".7" />`;
+const face = (cx, cy, happy, opts) => `${cheeks(cx, cy + 66, opts?.cheekGap)}${eyes(cx, cy, { ...opts, happy })}${mouth(cx, cy + 82, happy)}`;
+function star(cx, cy, r, fill = STAR) {
+  const points = Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, d = i % 2 ? r * .48 : r; return `${(cx + d * Math.cos(a)).toFixed(1)},${(cy + d * Math.sin(a)).toFixed(1)}`; }).join(" ");
+  return `<polygon points="${points}" fill="${fill}" stroke="${fill}" stroke-width="${r * .28}" stroke-linejoin="round" />`;
+}
+
+const DIRECTIONS = [
+  {
+    name: "1 斜戴星环", note: "很细的浅色星环斜着横过额头、伸出身体两边，像歪戴的帽檐；不重，也不像土星图标",
+    draw: happy => frame(`
+      <g transform="rotate(-18 500 390)"><ellipse cx="500" cy="390" rx="345" ry="74" fill="none" stroke="${CREAM}" stroke-width="28" /></g>
+      <circle cx="500" cy="560" r="300" fill="${ORANGE}" />
+      <g transform="rotate(-18 500 390)"><clipPath id="hat${happy}"><rect x="100" y="390" width="800" height="120" /></clipPath><ellipse clip-path="url(#hat${happy})" cx="500" cy="390" rx="345" ry="74" fill="none" stroke="${CREAM}" stroke-width="28" /></g>
+      ${face(500, 610, happy)}`)
+  },
+  {
+    name: "2 雀斑星球", note: "不要环：额头上几个浅色坑点像雀斑，一颗小星星绕着头转",
+    draw: happy => frame(`
+      <path d="M180 360 Q500 150 820 330" fill="none" stroke="${CREAM}" stroke-width="10" stroke-dasharray="4 26" stroke-linecap="round" />
+      <ellipse cx="500" cy="580" rx="305" ry="290" fill="${ORANGE}" />
+      <circle cx="380" cy="400" r="30" fill="${CRATER}" /><circle cx="455" cy="350" r="17" fill="${CRATER}" /><circle cx="640" cy="390" r="22" fill="${CRATER}" />
+      ${face(500, 600, happy)}
+      ${star(810, 320, 46)}`)
+  },
+  {
+    name: "3 土豆小行星", note: "圆滚滚但不完全圆的小行星，有两个小坑，最特别、最好认",
+    draw: happy => frame(`
+      <path d="M232 470 C 250 300 420 250 540 268 C 690 290 800 360 792 520 C 786 650 760 800 560 836 C 380 868 236 790 214 640 C 206 580 226 520 232 470 Z" fill="${ORANGE}" />
+      <circle cx="330" cy="420" r="32" fill="${CRATER}" /><circle cx="700" cy="470" r="20" fill="${CRATER}" /><circle cx="660" cy="350" r="14" fill="${CRATER}" />
+      ${face(505, 580, happy, { gap: 100, cheekGap: 172 })}`)
+  },
+  {
+    name: "4 星星发夹", note: "头顶右边别着一颗星星发夹，像小孩的发饰；身体干净，额头一个浅坑",
+    draw: happy => frame(`
+      <circle cx="500" cy="580" r="300" fill="${ORANGE}" />
+      <circle cx="370" cy="420" r="24" fill="${CRATER}" />
+      ${star(690, 340, 66)}
+      ${face(500, 610, happy)}`)
+  }
+];
+document.querySelector("#grid").innerHTML = DIRECTIONS.map(d => `<figure>
+  <div class="big">${d.draw(false)}</div>
+  <div class="pair"><div class="mid">${d.draw(true)}</div></div>
+  <div class="sizes"><div>${d.draw(false)}</div><div>${d.draw(false)}</div></div>
+  <figcaption><strong>${d.name}</strong><span>${d.note}</span></figcaption></figure>`).join("");
+</script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>小宇记 · 样板 v4</title>
+  <link rel="stylesheet" href="../../src/styles/design-tokens.css">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="../../node_modules/lucide/dist/umd/lucide.min.js" defer></script>
+  <script src="./script.js" type="module"></script>
+</head>
+<!-- Prototype only: demo data, simulated voice states. No microphone, no API, no family storage. -->
+<body data-backdrop="sky">
+  <aside class="review-bar" aria-label="样板控制">
+    <strong>样板 v4</strong>
+    <label>背景
+      <select id="backdrop">
+        <option value="sky" selected>浅天空</option>
+        <option value="neutral">中性灰白（现状）</option>
+      </select>
+    </label>
+    <button type="button" id="replayReturning">开场</button>
+    <button type="button" id="replayFirst">第一次</button>
+  </aside>
+
+  <!-- Opening: returning families see Xiaoyu rise and greet the child, then the chat screen. -->
+  <section class="launch" id="launch" aria-label="小宇记" hidden>
+    <img class="launch-xiaoyu" src="../../assets/xiaoyu-planet.png" alt="">
+    <p class="launch-greeting">嗨，安安</p>
+  </section>
+
+  <!-- First time: only Xiaoyu, the name and one button. Setup steps follow (not in this prototype). -->
+  <section class="welcome" id="welcome" aria-labelledby="welcomeTitle" hidden>
+    <img class="launch-xiaoyu" src="../../assets/xiaoyu-planet.png" alt="">
+    <h1 id="welcomeTitle">小宇记</h1>
+    <button class="primary welcome-start" id="welcomeStart" type="button">开始</button>
+  </section>
+
+  <!-- Child side: Xiaoyu only, plus a quiet parent entry that needs a press-and-hold. -->
+  <section class="kid" id="kid" aria-label="一起聊">
+    <button class="parent-gate" id="parentGate" type="button" aria-label="家长：按住进入">
+      <svg class="gate-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" /></svg>
+      <i data-lucide="lock" aria-hidden="true"></i><span>家长</span>
+    </button>
+    <p class="gate-hint" id="gateHint" role="status" hidden>按住一会儿</p>
+
+    <div class="stage" data-state="idle" id="stage">
+      <button class="xiaoyu" id="xiaoyu" type="button" aria-label="和小宇说说话">
+        <span class="level-ring" aria-hidden="true"></span>
+        <img src="../../assets/xiaoyu-planet.png" alt="">
+      </button>
+      <span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <strong class="state-word" id="stateWord" aria-live="polite">和小宇说说话</strong>
+      <div class="captions is-empty" id="captions">
+        <p class="caption-child">我在花园里看到一只好大的蜗牛</p>
+        <p class="caption-tutor">好大的蜗牛呀！它是不是背着一个圆圆的小房子，慢慢地往前爬？</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Parent side: three tabs at the bottom, a way back to the child at the top. -->
+  <section class="parent" id="parent" aria-label="家长" hidden>
+    <header class="parent-top">
+      <button class="back-to-kid" id="backToKid" type="button"><i data-lucide="chevron-left" aria-hidden="true"></i>回到聊天</button>
+    </header>
+
+    <div class="tab-panel" id="tab-growth" role="tabpanel" aria-labelledby="tabbtn-growth">
+      <h1>安安的成长</h1>
+      <article class="today-card">
+        <time>今天 · 11月3日</time>
+        <blockquote>“蜗牛的房子会不会越背越重呀？”</blockquote>
+        <ul class="topics"><li><i data-lucide="bug" aria-hidden="true"></i>蜗牛</li><li><i data-lucide="cloud-rain" aria-hidden="true"></i>下雨</li><li><i data-lucide="house" aria-hidden="true"></i>小房子</li></ul>
+        <p class="today-note">自己提出了一个“为什么”，还接着猜了答案。</p>
+      </article>
+
+      <h2>这一周</h2>
+      <ol class="days">
+        <li>
+          <time>11月1日 周六</time>
+          <article class="moment"><i data-lucide="moon" aria-hidden="true"></i><div><p>“月亮跟着我们的车走！”</p><span>月亮</span></div></article>
+        </li>
+        <li>
+          <time>10月30日 周四</time>
+          <article class="moment"><i data-lucide="blocks" aria-hidden="true"></i><div><p>“我搭了一个比我还高的塔。”</p><span>积木</span></div></article>
+          <article class="moment"><i data-lucide="palette" aria-hidden="true"></i><div><p>“紫色是红色和蓝色变的。”</p><span>颜色</span></div></article>
+        </li>
+      </ol>
+    </div>
+
+    <div class="tab-panel" id="tab-family" role="tabpanel" aria-labelledby="tabbtn-family" hidden>
+      <h1>家庭</h1>
+      <ul class="rows">
+        <li><button type="button" class="row"><span class="avatar">安</span><span class="row-main">安安<small>4–5 岁</small></span><i data-lucide="chevron-right" aria-hidden="true"></i></button></li>
+        <li><button type="button" class="row"><i data-lucide="users" aria-hidden="true"></i><span class="row-main">家庭成员<small>妈妈、爸爸</small></span><i data-lucide="chevron-right" aria-hidden="true"></i></button></li>
+      </ul>
+      <ul class="rows">
+        <li><label class="row"><span class="row-main">保存成长记录</span><input type="checkbox" role="switch" checked></label></li>
+        <li><label class="row"><span class="row-main">结束后显示小结</span><input type="checkbox" role="switch" checked></label></li>
+        <li><button type="button" class="row"><i data-lucide="shield" aria-hidden="true"></i><span class="row-main">家长码</span><i data-lucide="chevron-right" aria-hidden="true"></i></button></li>
+      </ul>
+      <ul class="rows">
+        <li><button type="button" class="row"><i data-lucide="mic" aria-hidden="true"></i><span class="row-main">设备与测试</span><i data-lucide="chevron-right" aria-hidden="true"></i></button></li>
+      </ul>
+    </div>
+
+    <div class="tab-panel" id="tab-backup" role="tabpanel" aria-labelledby="tabbtn-backup" hidden>
+      <h1>备份</h1>
+      <p class="backup-count"><strong>48</strong> 条记录 · 保存在这台设备</p>
+      <button class="primary" type="button"><i data-lucide="download" aria-hidden="true"></i>完整备份</button>
+      <ul class="rows">
+        <li><button type="button" class="row"><i data-lucide="list" aria-hidden="true"></i><span class="row-main">全部原话</span><i data-lucide="chevron-right" aria-hidden="true"></i></button></li>
+        <li><button type="button" class="row"><i data-lucide="upload" aria-hidden="true"></i><span class="row-main">恢复备份</span><i data-lucide="chevron-right" aria-hidden="true"></i></button></li>
+      </ul>
+    </div>
+
+    <nav class="tabbar" role="tablist" aria-label="家长">
+      <button role="tab" id="tabbtn-growth" aria-controls="tab-growth" aria-selected="true" data-tab="growth"><i data-lucide="sprout" aria-hidden="true"></i>成长</button>
+      <button role="tab" id="tabbtn-family" aria-controls="tab-family" aria-selected="false" data-tab="family"><i data-lucide="users" aria-hidden="true"></i>家庭</button>
+      <button role="tab" id="tabbtn-backup" aria-controls="tab-backup" aria-selected="false" data-tab="backup"><i data-lucide="archive" aria-hidden="true"></i>备份</button>
+    </nav>
+  </section>
+</body>
+</html>
