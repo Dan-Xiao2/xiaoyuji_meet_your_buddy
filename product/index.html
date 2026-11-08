@@ -15,6 +15,17 @@
     <link rel="stylesheet" href="./src/styles/design-system.css" />
   </head>
   <body data-mode="child">
+    <!-- Splash: Xiaoyu's planet fills the screen and she blinks once, then it fades (app.js). Composed for
+         full screen rather than cropped from the icon: the band runs flat across, the eyes are level and
+         closer together, the smile is symmetric, all centred. In the page itself, so it shows before the
+         scripts load. -->
+    <div class="splash" id="splash" aria-hidden="true">
+      <div class="splash-band"></div>
+      <svg class="splash-face" viewBox="0 0 240 120">
+        <g class="splash-eyes" fill="#27534c"><ellipse cx="52" cy="44" rx="26" ry="28" /><ellipse cx="188" cy="44" rx="26" ry="28" /></g>
+        <path d="M95 74 Q120 104 145 74" fill="none" stroke="#27534c" stroke-width="12" stroke-linecap="round" />
+      </svg>
+    </div>
     <div class="app-shell" inert aria-busy="true">
       <!-- Only the parent area has navigation; the child sees Xiaoyu alone (see body[data-mode]). -->
       <header class="topbar">
@@ -417,7 +428,20 @@
           </div>
           <p class="setup-bubble" id="setupBubble" aria-live="polite"></p>
         </div>
-        <div class="setup-page" data-setup-step="opening"></div>
+        <!-- Welcome: the illustration, the brand, one start button and the terms line. -->
+        <div class="setup-page welcome-page" data-setup-step="opening">
+          <div class="welcome-art" id="welcomeArt"></div>
+          <div class="welcome-ground">
+            <div class="welcome-brand">
+              <h1>小宇记</h1>
+              <p>孩子的发现，小宇都记得</p>
+            </div>
+            <div class="setup-actions">
+              <button class="primary-button setup-big" id="welcomeStart" type="button">开始使用</button>
+              <p class="welcome-terms">继续即表示你已阅读并同意<button type="button" class="legal-link" data-legal="terms">《用户协议》</button>和<button type="button" class="legal-link" data-legal="privacy">《隐私政策》</button></p>
+            </div>
+          </div>
+        </div>
         <div class="setup-page" data-setup-step="consent" hidden>
           <h2 id="setupTitle">个人信息保护提示</h2>
           <p class="setup-lead" id="setupLead">请孩子的家长或监护人阅读并确认</p>
@@ -474,6 +498,14 @@
             <button class="primary-button setup-big" id="setupHandover" type="button">好了，交给孩子</button>
           </div>
         </div>
+      </section>
+
+      <section class="subpage legal-page" id="legalPage" role="dialog" aria-modal="true" aria-labelledby="legalTitle" hidden>
+        <header class="subpage-bar">
+          <button class="subpage-back" id="legalBack" type="button" aria-label="返回"><i data-lucide="chevron-left" aria-hidden="true"></i></button>
+          <h2 id="legalTitle"></h2>
+        </header>
+        <article class="subpage-body legal-body" id="legalBody"></article>
       </section>
 
       <div class="parent-lock" id="parentLock" hidden>

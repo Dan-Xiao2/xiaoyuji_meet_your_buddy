@@ -1,0 +1,17 @@
+/* Style board: each card shows Xiaoyu large (idle and happy), on the child's sky, and at icon sizes. */
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px 16px 48px; font: 15px/1.6 system-ui, -apple-system, "PingFang SC", sans-serif; color: var(--xy-ink); background: #f4f2ee; }
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; max-width: 1200px; margin: 0 auto 16px; }
+h1 { margin: 0; font-size: 22px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: white; cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; max-width: 1200px; margin: 0 auto; }
+.card { display: grid; gap: 12px; padding: 16px; border-radius: 18px; background: white; }
+.card h2 { margin: 0; font-size: 17px; }
+.card p { margin: -8px 0 0; font-size: 13px; color: var(--xy-muted); }
+.stage { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 16px 8px; border-radius: 14px; background: linear-gradient(180deg, #c4dce6 0%, #dcebef 45%, #eef5f4 100%); }
+.stage svg { width: 100%; height: auto; display: block; }
+.sizes { display: flex; align-items: end; gap: 14px; padding: 4px 4px 0; }
+.sizes svg { display: block; }
+.sizes .s96 { width: 96px; height: 96px; }
+.sizes .s56 { width: 56px; height: 56px; }
+.sizes .s36 { width: 36px; height: 36px; }

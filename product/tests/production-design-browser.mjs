@@ -160,8 +160,21 @@ try {
     if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = async () => { throw new DOMException("Isolated UI test", "NotAllowedError"); };
   });
   await page.goto(process.env.TEST_URL || "http://localhost:4173/");
+  // Splash: the planet fills the screen first, then goes away by itself.
+  assert.equal(await page.locator("#splash").isVisible(), true);
+  await page.locator("#splash").waitFor({ state: "detached" });
   await page.locator("#setupFlow").waitFor({ state: "visible" });
-  assert.match(await page.locator("#setupBubble").innerText(), /我是小宇/);
+  // Welcome: illustration, brand, start button and the terms line with both documents.
+  assert.equal(await page.locator(".welcome-scene").isVisible(), true);
+  assert.match(await page.locator(".welcome-terms").innerText(), /用户协议.*隐私政策/);
+  await page.screenshot({ path: "screenshots/production-design/390-welcome.png" });
+  await page.locator('[data-legal="privacy"]').click();
+  await page.locator("#legalPage").waitFor({ state: "visible" });
+  assert.match(await page.locator("#legalBody").innerText(), /阿里云百炼/);
+  await page.screenshot({ path: "screenshots/production-design/390-privacy.png" });
+  await page.locator("#legalBack").click();
+  await page.locator("#legalPage").waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "开始使用" }).click();
   await page.locator("#setupAgree").waitFor({ state: "visible" });
   assert.equal(await page.locator("#setupTitle").innerText(), "个人信息保护提示");
   assert.match(await page.locator("#consentFacts").innerText(), /云端/);
@@ -192,7 +205,7 @@ try {
   await page.locator("#childStage").waitFor({ state: "visible" });
   assert.equal(await page.locator("#setupFlow").isVisible(), false);
   await fresh.close();
-  console.log("PASS first use: opening, consent, nickname, age, microphone check and hand over");
+  console.log("PASS first use: welcome and terms, consent, nickname, age, microphone check and hand over");
 
   // A family that agreed to the older wording sees only the policy update (no name or age), and
   // agreeing keeps their saving choice.

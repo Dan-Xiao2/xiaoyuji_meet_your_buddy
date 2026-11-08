@@ -289,11 +289,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .setup-flow { background: linear-gradient(180deg, #d5e7f0 0%, #eef5f4 38%, var(--page) 70%); }
 .setup-bar { background: transparent; }
 .setup-host { display: grid; justify-items: center; gap: 14px; padding: 4px 20px 8px; }
-.setup-flow[data-step="consent"] .setup-host { display: none; }
+.setup-flow[data-step="consent"] .setup-host, .setup-flow[data-step="opening"] .setup-host, .setup-flow[data-step="opening"] .setup-bar { display: none; }
 .setup-xiaoyu { position: relative; width: 148px; height: 148px; transition: width .45s cubic-bezier(.3, 1.2, .5, 1), height .45s cubic-bezier(.3, 1.2, .5, 1); }
-.setup-flow[data-step="opening"] .setup-xiaoyu, .setup-flow[data-step="handover"] .setup-xiaoyu { width: 220px; height: 220px; }
-.setup-flow[data-step="opening"] .setup-host { padding-top: 14vh; }
-.setup-flow[data-step="opening"] .setup-xiaoyu { animation: setup-rise .6s cubic-bezier(.2, 1.4, .4, 1) both; }
+.setup-flow[data-step="handover"] .setup-xiaoyu { width: 220px; height: 220px; }
 .setup-flow[data-step="handover"] .setup-xiaoyu .xy { animation: setup-wave .9s ease-in-out 2; transform-origin: 50% 90%; }
 .setup-xiaoyu .xy { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; }
 .setup-level { position: absolute; inset: 0; border-radius: 50%; background: rgba(243, 154, 85, .25); transform: scale(var(--level, 1)); transition: transform 80ms linear, opacity .2s; opacity: 0; }
@@ -313,7 +311,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .setup-big { min-height: 60px !important; font-size: 18px; }
 .setup-actions .primary-button .lucide { width: 20px; height: 20px; margin-right: 6px; }
 .setup-actions[hidden], .setup-bar .subpage-back[hidden] { display: none; }
-@keyframes setup-rise { from { transform: translateY(50vh) scale(.8); } to { transform: none; } }
 @keyframes setup-wave { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } }
 @keyframes setup-star { 0% { opacity: 0; transform: translate(0, 0) scale(.3); } 60% { opacity: 1; } 100% { opacity: 1; transform: translate(64px, -100px) scale(1); } }
 @media (prefers-reduced-motion: reduce) {
@@ -363,3 +360,46 @@ body[data-mode="child"] { background: linear-gradient(180deg, #c4dce6 0%, #dcebe
 @media (prefers-reduced-motion: reduce) {
   .app-talk-launch .xy, .parent-entry.is-holding .parent-entry-ring circle, .tab-button { animation: none !important; transition: none !important; }
 }
+
+/* Welcome: a full-screen illustration, the brand, one start button, and the terms line. */
+.setup-flow[data-step="opening"] { overflow-x: hidden; background: linear-gradient(180deg, #c9dfe9 0%, #e3eff1 60%); }
+.welcome-page { min-height: 100svh; align-content: end; gap: 0; padding-top: max(24px, env(safe-area-inset-top)); padding-bottom: 0; text-align: center; }
+.welcome-art { width: min(100%, 400px); margin: 0 auto -1px; }
+/* The ground: the front hill's colour, carried to the screen edges and the bottom. */
+.welcome-ground { display: grid; gap: 16px; padding: 4px 0 calc(24px + env(safe-area-inset-bottom)); background: #a8d6b8; box-shadow: 0 0 0 100vmax #a8d6b8; clip-path: inset(0 -100vmax -100vmax); }
+.welcome-scene { display: block; width: 100%; height: auto; overflow: visible; }
+.welcome-brand h1 { margin: 0; font-size: 34px; font-weight: 750; letter-spacing: .04em; line-height: 1.2; }
+.welcome-brand p { margin: 6px 0 0; color: #2b4a45; font-size: 16px; }
+.welcome-page .setup-actions { margin-top: 4px; }
+.welcome-terms { margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: #2b4a45; }
+.legal-link { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.ws-hero { animation: ws-rise .7s cubic-bezier(.2, 1.3, .4, 1) both, ws-float 3.4s ease-in-out .7s infinite; }
+.ws-float:not(.ws-hero) { animation: ws-float 4s ease-in-out infinite; }
+.ws-f2 { animation-delay: -1s !important; } .ws-f3 { animation-delay: -2s !important; } .ws-f4 { animation-delay: -3s !important; }
+.ws-sway { transform-origin: 318px 392px; animation: ws-sway 5s ease-in-out infinite; }
+.ws-cloud { animation: ws-drift 14s ease-in-out infinite alternate; } .ws-cloud-slow { animation-duration: 20s; }
+@keyframes ws-drift { from { transform: translateX(-10px); } to { transform: translateX(14px); } }
+@keyframes ws-rise { from { transform: translateY(60px) scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes ws-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes ws-sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+.legal-body { gap: 4px; padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
+.legal-body h3 { margin: 16px 0 2px; font-size: 16px; }
+.legal-body p, .legal-body ul { margin: 0; font-size: 15px; line-height: 1.7; }
+.legal-body ul { padding-left: 20px; }
+.legal-meta { color: var(--muted); font-size: 13px !important; }
+.legal-page { z-index: 70; }
+@media (prefers-reduced-motion: reduce) { .ws-hero, .ws-float, .ws-sway, .ws-cloud { animation: none !important; } }
+
+/* Splash: the planet fills the screen, Xiaoyu blinks once at about half a second, then it fades. */
+.splash { position: fixed; z-index: 100; inset: 0; background: #f2a061; pointer-events: none; transition: opacity .35s ease, transform .35s ease; }
+/* Fallback: if the app never gets to dismiss it (for example the recovery screen), it fades by itself. */
+.splash { animation: splash-fallback .35s ease 3s forwards; }
+@keyframes splash-fallback { to { opacity: 0; visibility: hidden; } }
+/* The face sits a little above the middle; the band runs flat across below it. Sizes follow the
+   shorter side so the proportions hold on phones, tablets and wide screens. */
+.splash-face { position: absolute; left: 50%; top: 42%; width: min(66vw, 40vh, 380px); height: auto; transform: translate(-50%, -50%); overflow: visible; }
+.splash-band { position: absolute; left: 0; right: 0; top: 59%; height: clamp(56px, 10vh, 120px); background: #27534c; }
+.splash-eyes ellipse { transform-box: fill-box; transform-origin: center; animation: splash-blink 1.1s ease-in-out both; }
+@keyframes splash-blink { 0%, 40%, 54%, 100% { transform: scaleY(1); } 47% { transform: scaleY(.08); } }
+.splash.is-leaving { opacity: 0; transform: scale(1.08); }
+@media (prefers-reduced-motion: reduce) { .splash-eyes ellipse { animation: none; } .splash { transition: opacity .2s ease; } .splash.is-leaving { transform: none; } }

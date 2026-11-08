@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>小宇记 · 画风对比</title>
+  <link rel="stylesheet" href="../../src/styles/design-tokens.css">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="../../node_modules/roughjs/bundled/rough.js"></script>
+  <script src="./script.js" type="module"></script>
+</head>
+<!-- Style exploration only: Xiaoyu keeps the A1 shapes (the user's choice); only the drawing medium
+     changes. Everything is drawn in the page (SVG filters and Rough.js with fixed seeds); no images
+     from other works are used. Not part of the product page. -->
+<body>
+  <header class="top">
+    <h1>小宇画风对比</h1>
+    <label class="toggle"><input type="checkbox" id="doodles"> 加一点涂鸦小装饰</label>
+  </header>
+  <main class="grid" id="grid"></main>
+</body>
+</html>

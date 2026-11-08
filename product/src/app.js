@@ -29,6 +29,8 @@ import { getDurableArchiveStatus, subscribeDurableArchive } from "./services/ind
 import { renderAdultSummary, renderParentTimeline } from "./ui/summary.js";
 import { renderOfflineTask } from "./ui/offlineTask.js";
 import { xiaoyuSvg } from "./ui/xiaoyuFace.js";
+import { welcomeSceneSvg } from "./ui/welcomeScene.js";
+import { LEGAL_DOCS } from "./content/legalDocs.js";
 import { createParentNoteText } from "./ui/parentNote.js";
 import { applyOfflineObservation, createObservationSummary } from "./student/offlineObservationUpdater.js";
 import { migrateStudentModel } from "./student/studentSchema.js";
@@ -1205,7 +1207,7 @@ function startSessionFromMobileHome() {
   window.setTimeout(() => dom.mainVoiceButton.focus(), 0);
 }
 
-// First use: opening → consent → nickname → age → microphone check → hand over. A consent update:
+// First use: welcome → consent → nickname → age → microphone check → hand over. A consent update:
 // consent only. One page at a time; the profile is saved after the age page, so leaving before then
 // changes nothing. Xiaoyu stays at the top and speaks each question in her bubble.
 const SETUP_STEPS = { first: ["opening", "consent", "name", "age", "mic", "handover"], update: ["consent"] };
@@ -1242,10 +1244,8 @@ function openSetup() {
 }
 
 const SETUP_ENTER = {
-  opening() {
-    setupSay("嗨！我是小宇", "happy");
-    setupTimer = window.setTimeout(() => showSetupStep("consent"), reducedMotion() ? 300 : 1600);
-  },
+  // Welcome: the illustration and the brand; the user starts when ready.
+  opening() { setupSay("", "idle"); },
   // The consent is the parent's decision: formal wording, no character speech.
   consent() { setupSay("", "idle"); },
   name() { setupSay(setup.name ? `嗨，${setup.name}！` : "你叫什么名字呀？"); },
@@ -1273,7 +1273,7 @@ function showSetupStep(step) {
   });
   document.querySelector("#setupBack").hidden = step === "opening";
   SETUP_ENTER[step]();
-  const focusTarget = { consent: "#setupAgree", name: "#setupName", age: "[data-setup-age]", mic: "#setupMicAllow", handover: "#setupHandover" }[step];
+  const focusTarget = { opening: "#welcomeStart", consent: "#setupAgree", name: "#setupName", age: "[data-setup-age]", mic: "#setupMicAllow", handover: "#setupHandover" }[step];
   if (focusTarget) window.setTimeout(() => dom.setupFlow.querySelector(focusTarget)?.focus({ preventScroll: true }), 0);
 }
 
@@ -1374,6 +1374,27 @@ document.querySelector("#setupBack").addEventListener("click", () => {
   const index = steps.indexOf(setup.step);
   if (index > 1 || (index === 1 && steps[0] !== "opening")) showSetupStep(steps[index - 1]); else closeSetup();
 });
+document.querySelector("#welcomeArt").innerHTML = welcomeSceneSvg();
+document.querySelector("#welcomeStart").addEventListener("click", () => showSetupStep("consent"));
+
+// The user agreement and privacy policy, opened from the welcome page.
+const legalPage = document.querySelector("#legalPage");
+let legalOpener = null;
+for (const link of document.querySelectorAll("[data-legal]")) {
+  link.addEventListener("click", () => {
+    const doc = LEGAL_DOCS[link.dataset.legal];
+    document.querySelector("#legalTitle").textContent = doc.title;
+    document.querySelector("#legalBody").innerHTML = doc.body;
+    legalPage.hidden = false;
+    legalPage.scrollTop = 0;
+    legalOpener = link;
+    window.setTimeout(() => document.querySelector("#legalBack").focus(), 0);
+  });
+}
+const closeLegal = () => { legalPage.hidden = true; legalOpener?.focus(); };
+document.querySelector("#legalBack").addEventListener("click", closeLegal);
+legalPage.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.stopPropagation(); closeLegal(); } });
+
 document.querySelector("#setupAgree").addEventListener("click", () => {
   if (setup.mode === "first") { showSetupStep("name"); return; }
   if (saveSetup()) closeSetup();
@@ -1885,7 +1906,17 @@ window.addEventListener("pagehide", () => stopInteraction());
 
 syncProfileForm();
 commitState(state, { type: APP_EVENT.INITIALIZED });
-// The very first open goes straight into the setup, starting with Xiaoyu's hello.
+// Splash: shown for at least ~1.1 s from page start (time for the blink), then fades away.
+(function dismissSplash() {
+  const splash = document.querySelector("#splash");
+  if (!splash) return;
+  const hold = reducedMotion() ? 0 : Math.max(0, 1100 - performance.now());
+  window.setTimeout(() => {
+    splash.classList.add("is-leaving");
+    window.setTimeout(() => splash.remove(), 380);
+  }, hold);
+})();
+// The very first open goes straight into the setup, starting with the welcome page.
 if (!state.profile.configured && state.session?.status !== "active") openSetup();
 document.documentElement.dataset.appReady = "true";
 loadVoiceStatus();

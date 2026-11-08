@@ -159,7 +159,7 @@ try {
     assert.equal(await dialog.isVisible(), true);
     await dialog.getByRole('button', { name: '确认清空' }).click();
     await dialog.waitFor({ state: 'hidden' });
-    await page.waitForFunction(() => document.activeElement.id === 'setupAgree');
+    await page.waitForFunction(() => document.activeElement.id === 'welcomeStart');
     const cleared = await readRaw();
     assert.equal(JSON.parse(cleared['xiaoyuji-learning-state-v1']).profile.configured, false);
     assert.equal(cleared['xiaoyuji-local-student-db-v1'], null);
