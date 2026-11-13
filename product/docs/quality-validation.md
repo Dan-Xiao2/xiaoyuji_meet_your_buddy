@@ -71,7 +71,7 @@ node scripts/benchmark-real-model.mjs --live --allow-paid-api --repeats=3 --pric
 - 某次回看是否带来一次更好的亲子交流。
 - 语音、延迟、重复问题或错误记录是否让家庭放弃。
 
-试用记录使用 `docs/templates/manual-validation-record.json`，只保存最小必要信息。真实儿童原话默认不进入 issue、截图或公开报告。
+试用记录使用 `docs/templates/manual-validation-record.json`，只保存最小必要信息。页面自动记下的每次聊天结果（句数、纠正、结束方式、隔几天再来、家长回答、收藏与修改数）见 [value-measurement.md](value-measurement.md)，从家庭设置 → 设备与测试 → 测试数据导出。试点的同意书、观察记录填写方法、访谈提纲和每周汇总见 [pilot-handbook.md](pilot-handbook.md)。真实儿童原话默认不进入 issue、截图或公开报告。
 
 ## 6. 发布判断
 

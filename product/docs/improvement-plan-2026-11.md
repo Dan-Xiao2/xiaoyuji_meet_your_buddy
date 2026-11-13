@@ -1,6 +1,8 @@
 # 小宇记改进计划（2026 年 11 月起，约 6 周）
 
 > 日期：2026-11-08。依据：`docs/product-framework.md`（最高依据）、`docs/product-optimization-plan.md`、`docs/quality-validation.md`、`docs/development-log.md`、11 月 1–3 日 iPhone 试点导出数据和界面审查。
+> 2026-11-12 进展：计划外接入并测试了阿里云通话模式（家庭设置开关，默认关）。真机结论：手机外放不可用（iPhone 炸音为 iOS 26.2–27 Safari 已知问题，安卓音量忽小、断续），戴耳机可用；暂不做原生 App。网页语音在 11-08 到 11-09 做过三轮非正式真机（iPhone 外放，等待中位数约 3.05 秒；开着开口打断时有炸音、音量跳变、打断不稳），完整矩阵和“外放打断默认值”仍未完成。合规缺口中，首次同意已写明声音和聊天会发到云端（同意版本 2）；通话模式开放给家庭前还要更新隐私政策。语音现状见 [voice-status.md](voice-status.md)。
+> 2026-11-13 进展：阶段 3 的测量已实现（会话结果、家长一键回答、再次使用的天数，导出里每次聊天一行），见 [value-measurement.md](value-measurement.md)。试点手册草稿已写好，见 [pilot-handbook.md](pilot-handbook.md)，待用户审阅；测量还没在真机和真实家庭里用过。另外两项为家庭试点铺路：境内部署的代码和部署包已就绪，等用户买服务器、域名并备案（[deployment-cn.md](deployment-cn.md)）；原生 App 技术验证中，iPhone 外放用系统回声消除不炸音、插话 10/10（[native-app.md](native-app.md)）。网页“关掉开口打断后外放是否干净”仍未测。
 > 执行方式：用户本人独立开发；本计划按顺序推进，每次只推进一个核心改动并验证（`AGENTS.md`）。工作量为粗估，不是日历承诺。
 
 ## 一、一句话结论
