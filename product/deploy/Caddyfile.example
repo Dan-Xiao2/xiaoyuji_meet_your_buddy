@@ -1,0 +1,20 @@
+# Caddy in front of the app (installed by deploy/enable-https.sh as /etc/caddy/Caddyfile, with the
+# domain filled in). Caddy gets and renews the HTTPS certificate from Let's Encrypt by itself.
+# No "log" directive: Caddy then writes no access log (addresses and paths of every request).
+DOMAIN {
+	# Compress pages and scripts, but not the API: replies and Xiaoyu's voice are streamed.
+	@pages not path /api/*
+	encode @pages gzip
+
+	# Streamed replies (ndjson) and voice (PCM) are passed on as they arrive; the recognition
+	# WebSocket is proxied as well.
+	reverse_proxy 127.0.0.1:4173 {
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}

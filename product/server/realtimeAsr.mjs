@@ -20,20 +20,25 @@ export function realtimeAsrConfig(env = process.env) {
 // onSpeechStart fires when an utterance opens (the browser has already detected speech), so the
 // caller can warm connections for the reply and speech requests that follow. Not on finish: the
 // reply request follows too soon and would find warm sockets busy. It must not throw or block.
-// authorize decides whether this client may open a (paid) recognition connection at all.
-export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect = (url, options) => new WebSocket(url, options), onSpeechStart = () => {}, authorize = () => true } = {}) {
+// authorize decides whether this client may open a (paid) recognition connection at all. admit then
+// gives it a lease within its family's usage (server/usageLimits.mjs), or null to refuse:
+// { audio(bytes) → whether more audio is allowed, release() }. maxConnections caps the whole server.
+const unlimited = () => ({ audio: () => true, release() {} });
+export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect = (url, options) => new WebSocket(url, options), onSpeechStart = () => {},
+  authorize = () => true, admit = unlimited, maxConnections = 4 } = {}) {
   const speechStarted = () => { try { onSpeechStart(); } catch { /* warming must never affect recognition */ } };
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 32768 });
   server.on("upgrade", (request, socket, head) => {
     let sameOrigin = false;
     try { sameOrigin = new URL(request.headers.origin).host === request.headers.host; } catch { /* Missing/invalid origins are refused. */ }
-    if (request.url !== "/api/asr/realtime" || !sameOrigin || !authorize(request) || sockets.clients.size >= 4) {
+    const lease = request.url === "/api/asr/realtime" && sameOrigin && authorize(request) && sockets.clients.size < maxConnections ? admit(request) : null;
+    if (!lease) {
       socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       return;
     }
-    sockets.handleUpgrade(request, socket, head, client => sockets.emit("connection", client));
+    sockets.handleUpgrade(request, socket, head, client => sockets.emit("connection", client, lease));
   });
-  sockets.on("connection", client => {
+  sockets.on("connection", (client, lease = unlimited()) => {
     const settings = config();
     let upstream, done = false, ready = false, committed = false, bytes = 0, timer;
     // Recent conversation text sent by the browser before any audio. Passed to the recogniser as
@@ -51,6 +56,7 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
     const send = data => { if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(data)); };
     const close = () => {
       clearTimeout(timer);
+      lease.release();
       if (upstream && upstream.readyState !== WebSocket.CLOSED) upstream.terminate();
       if (client.readyState === WebSocket.OPEN) client.close();
     };
@@ -136,6 +142,7 @@ export function attachRealtimeAsr(server, { config = realtimeAsrConfig, connect 
       if (!ready || committed || !binary) { fail("invalid-state"); return; }
       bytes += raw.length;
       if (!raw.length || raw.length % 2 || bytes > 640000 || upstream.bufferedAmount > 128000) { fail("audio-limit"); return; }
+      if (!lease.audio(raw.length)) { fail("daily-limit"); return; }
       emit("input_audio_buffer.append", { audio: raw.toString("base64") });
     });
   });

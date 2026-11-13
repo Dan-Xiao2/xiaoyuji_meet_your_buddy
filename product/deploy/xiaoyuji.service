@@ -1,0 +1,29 @@
+# systemd service for the app (installed by deploy/setup-server.sh). Runs as its own user, can read
+# the app but not change it, and restarts if it stops. Logs: journalctl -u xiaoyuji
+[Unit]
+Description=Xiaoyuji (小宇记) family pilot server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=xiaoyuji
+Group=xiaoyuji
+WorkingDirectory=/opt/xiaoyuji/product
+ExecStart=/usr/local/bin/node server/server.mjs
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

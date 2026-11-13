@@ -15,8 +15,10 @@ import { planDrawingWithQwen } from "./drawingPlanner.mjs";
 import { attachRealtimeAsr, realtimeAsrConfig } from "./realtimeAsr.mjs";
 import { createProviderWarmup } from "./providerWarmup.mjs";
 import { installKeepAliveDispatcher } from "./httpKeepAlive.mjs";
-import { createLanAccess, pairPage } from "./lanAccess.mjs";
+import { createAccess, parseAccessCodes, pairPage } from "./lanAccess.mjs";
+import { createUsageLimits, usageLimitsFromEnv } from "./usageLimits.mjs";
 import { routeOpenDrawing, generateOpenDrawing } from "./openDrawing.mjs";
+import { rtcCallEnabled, startRtcCall } from "./rtcCall.mjs";
 import { createTutorContext, tutorEnrichmentResult } from "../src/services/tutorContext.js";
 
 const root = normalize(join(fileURLToPath(new URL(".", import.meta.url)), ".."));
@@ -33,11 +35,17 @@ const limits = {
   speech: 32_000,
   tutor: 2_000_000
 };
+// Public server mode (docs/deployment-cn.md): behind a local HTTPS proxy, with per-family access
+// codes and daily limits, serving only the app itself: no test pages, design drafts or call mode.
+// TRUST_PROXY: the proxy on this machine gives the client's address (for counting wrong codes).
+const publicMode = process.env.PUBLIC_MODE === "true";
+const trustProxy = process.env.TRUST_PROXY === "true";
 const publicPrefixes = [
-  "/src/", "/assets/", "/design-drafts/",
+  "/src/", "/assets/", ...(publicMode ? [] : ["/design-drafts/"]),
   "/node_modules/motion/", "/node_modules/roughjs/", "/node_modules/konva/", "/node_modules/lucide/"
 ];
-const publicFiles = new Set(["/index.html", "/voice-lab.html", "/mic-check.html", "/docs/architecture/xiaoyuji-runtime.architecture.html"]);
+const publicFiles = new Set(publicMode ? ["/index.html"]
+  : ["/index.html", "/voice-lab.html", "/mic-check.html", "/rtc-lab.html", "/docs/architecture/xiaoyuji-runtime.architecture.html"]);
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -56,7 +64,14 @@ let imageRequests = 0;
 // a pairing code (see lanAccess.mjs). Both are required whenever the server listens beyond loopback.
 const tls = process.env.HTTPS_CERT && process.env.HTTPS_KEY
   ? { cert: readFileSync(process.env.HTTPS_CERT), key: readFileSync(process.env.HTTPS_KEY) } : null;
-const lanAccess = process.env.LAN_ACCESS_CODE ? createLanAccess({ code: process.env.LAN_ACCESS_CODE }) : null;
+// One code per family (ACCESS_CODES="F1:code,F2:code"), or the home-network pilot's single code.
+const accessCodes = process.env.ACCESS_CODES ? parseAccessCodes(process.env.ACCESS_CODES)
+  : process.env.LAN_ACCESS_CODE ? { lan: process.env.LAN_ACCESS_CODE } : null;
+const lanAccess = accessCodes ? createAccess({ codes: accessCodes, sessionMs: (Number(process.env.ACCESS_SESSION_HOURS) || 12) * 3600_000,
+  ...(process.env.SESSION_SECRET ? { secret: process.env.SESSION_SECRET } : {}) }) : null;
+const usage = createUsageLimits({ limits: usageLimitsFromEnv(),
+  onDayEnd: (day, family, counts) => console.log(`[小宇记用量] ${day} ${family} ${JSON.stringify(counts)}`) });
+const rtcAllowed = () => !publicMode && rtcCallEnabled();
 const handler = (request, response) => {
   handleRequest(request, response).catch((error) => {
     if (response.destroyed || response.headersSent) {
@@ -70,6 +85,9 @@ export const server = tls ? createHttpsServer(tls, handler) : createServer(handl
 
 async function handleRequest(request, response) {
   const pathname = requestUrl(request).pathname;
+
+  // For the server's own checks (deploy/README.md); says nothing else.
+  if (request.method === "GET" && pathname === "/healthz") return sendJson(response, 200, { ok: true });
 
   if (lanAccess) {
     if (pathname === "/pair") return handlePair(request, response);
@@ -86,6 +104,9 @@ async function handleRequest(request, response) {
   if (request.method === "POST" && pathname.startsWith("/api/") && !isSameOrigin(request)) {
     throw new RequestError(403, "forbidden");
   }
+  // A paid call is refused once the family has used today's allowance (server/usageLimits.mjs).
+  const family = lanAccess?.familyOf(request) ?? null;
+  const spend = kind => { if (!usage.take(family, kind)) throw new RequestError(429, "daily-limit"); };
 
   if (pathname.startsWith("/api/voice-lab/")) {
     if (lanAccess || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress)) throw new RequestError(403, "local-lab-only");
@@ -99,6 +120,7 @@ async function handleRequest(request, response) {
   if (request.method === "POST" && ["/api/whiteboard/route", "/api/whiteboard/image"].includes(pathname)) {
     const image = pathname.endsWith("/image");
     if (image && imageRequests >= 1) throw new RequestError(429, "busy");
+    spend(image ? "images" : "drawings");
     const abort = new AbortController();
     response.once("close", () => abort.abort());
     if (image) imageRequests++;
@@ -115,6 +137,7 @@ async function handleRequest(request, response) {
   }
 
   if (request.method === "POST" && pathname === "/api/whiteboard/plan") {
+    spend("drawings");
     const abort = new AbortController();
     response.once("close", () => abort.abort());
     try {
@@ -134,6 +157,7 @@ async function handleRequest(request, response) {
     sendJson(response, 200, {
       ...speech,
       realtimeTranscription: realtimeAsrConfig().enabled,
+      rtcCall: rtcAllowed(),
       cloudTranscription: speech.asr.configured,
       model: speech.asr.model,
       message: speech.asr.configured ? `已连接 ${speech.asr.provider} 语音转文字` : "云端语音转文字尚未配置，将使用浏览器能力降级。"
@@ -141,7 +165,20 @@ async function handleRequest(request, response) {
     return;
   }
 
+  // The child's screen in call mode: start a call with the RTC agent, with the bounded reply context.
+  if (request.method === "POST" && pathname === "/api/rtc/call") {
+    if (!rtcAllowed()) throw new RequestError(503, "rtc-not-configured");
+    const body = await readJson(request, 64_000);
+    try {
+      return sendJson(response, 200, await startRtcCall({ ageBand: body.ageBand, context: body.context }));
+    } catch (error) {
+      console.warn("[小宇记] RTC call not started:", error.message);
+      throw new RequestError(error.status || 502, error.status === 503 ? "rtc-not-configured" : "rtc-start-failed");
+    }
+  }
+
   if (request.method === "POST" && pathname === "/api/transcribe") {
+    spend("transcriptions");
     const body = await readJson(request, limits.transcription);
     requireString(body.audioBase64, "audioBase64", limits.transcription);
     requireString(body.mimeType, "mimeType", 100);
@@ -151,6 +188,7 @@ async function handleRequest(request, response) {
   }
 
   if (request.method === "POST" && pathname === "/api/speech/stream") {
+    spend("speech");
     const abort = new AbortController();
     response.once("close", () => abort.abort());
     try {
@@ -174,6 +212,7 @@ async function handleRequest(request, response) {
   }
 
   if (request.method === "POST" && pathname === "/api/speech") {
+    spend("speech");
     const body = await readJson(request, limits.speech);
     requireString(body.text, "text", 2000);
     const result = await synthesizeSpeech(body.text);
@@ -195,6 +234,7 @@ async function handleRequest(request, response) {
   }
 
   if (request.method === "POST" && pathname === "/api/tutor") {
+    spend("extractions");
     const abort = new AbortController();
     response.once("close", () => abort.abort());
     try {
@@ -212,6 +252,7 @@ async function handleRequest(request, response) {
   }
 
   if (request.method === "POST" && pathname === "/api/tutor/quick") {
+    spend("replies");
     const abort = new AbortController();
     response.once("close", () => abort.abort());
     try {
@@ -229,6 +270,7 @@ async function handleRequest(request, response) {
   // The same quick reply, one checked sentence per line, so the page can start speaking the first
   // sentence while the rest is still being written. The last line carries the whole reply and status.
   if (request.method === "POST" && pathname === "/api/tutor/quick/stream") {
+    spend("replies");
     const abort = new AbortController();
     response.once("close", () => abort.abort());
     try {
@@ -260,14 +302,29 @@ async function handleRequest(request, response) {
 }
 
 // Warm reply and speech connections while the child is still speaking (see providerWarmup.mjs).
-attachRealtimeAsr(server, { onSpeechStart: createProviderWarmup(), authorize: request => !lanAccess || lanAccess.authorized(request) });
+attachRealtimeAsr(server, { onSpeechStart: createProviderWarmup(), authorize: request => !lanAccess || lanAccess.authorized(request),
+  admit: request => usage.openRecognition(lanAccess?.familyOf(request) ?? null), maxConnections: Number(process.env.ASR_MAX_CONNECTIONS) || 4 });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  if (!["127.0.0.1", "::1", "localhost"].includes(host) && (!tls || !lanAccess)) {
+  const loopback = ["127.0.0.1", "::1", "localhost"].includes(host);
+  if (!loopback && (!tls || !lanAccess)) {
     console.error("Listening beyond this computer requires HTTPS_CERT, HTTPS_KEY and LAN_ACCESS_CODE (use npm run pilot:lan).");
     process.exit(1);
   }
-  server.listen(port, host, () => console.log(`小宇记 MVP is running at ${tls ? "https" : "http"}://${host}:${port}`));
+  // The public server listens on this machine only, behind the HTTPS proxy (deploy/Caddyfile.example).
+  if (publicMode && (!loopback || !process.env.ACCESS_CODES || !process.env.SESSION_SECRET)) {
+    console.error("PUBLIC_MODE needs HOST=127.0.0.1, ACCESS_CODES and SESSION_SECRET (see deploy/README.md).");
+    process.exit(1);
+  }
+  // Today's counts (numbers only) when the service stops, e.g. for an update.
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    process.once(signal, () => {
+      const counts = usage.snapshot();
+      if (Object.keys(counts).length) console.log(`[小宇记用量] 停止时 ${JSON.stringify(counts)}`);
+      process.exit(0);
+    });
+  }
+  server.listen(port, host, () => console.log(`小宇记 MVP is running at ${tls ? "https" : "http"}://${host}:${port}${publicMode ? " (public mode)" : ""}`));
 }
 
 async function handlePair(request, response) {
@@ -282,9 +339,17 @@ async function handlePair(request, response) {
     body += chunk;
     if (body.length > 1024) throw new RequestError(413, "request-too-large");
   }
-  const result = lanAccess.pair(new URLSearchParams(body).get("code"));
+  const result = lanAccess.pair(new URLSearchParams(body).get("code"), clientAddress(request));
   if (result.ok) return send(303, "", { Location: "/", "Set-Cookie": result.cookie });
-  send(result.reason === "locked" ? 429 : 401, pairPage(result.reason === "locked" ? "尝试次数过多，请 10 分钟后再试。" : "访问码不对，请再看一下电脑上的显示。"));
+  send(result.reason === "locked" ? 429 : 401, pairPage(result.reason === "locked" ? "尝试次数过多，请 10 分钟后再试。" : "访问码不对，请再核对一下。"));
+}
+
+// Where a pairing attempt came from, for counting wrong codes. Behind the HTTPS proxy on this machine
+// (TRUST_PROXY) it is the address the proxy added last; otherwise the connection's own address.
+function clientAddress(request) {
+  const own = request.socket.remoteAddress || "unknown";
+  if (!trustProxy || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(own)) return own;
+  return String(request.headers["x-forwarded-for"] || "").split(",").map(part => part.trim()).filter(Boolean).at(-1) || own;
 }
 
 function requestUrl(request) {

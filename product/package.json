@@ -14,7 +14,7 @@
     "check:dialogue": "node --test tests/dialogue-benchmark.test.mjs",
     "check:growth": "node --test tests/growth-period.test.mjs tests/student-schema.test.mjs tests/growth-turn-context.test.mjs",
     "check:safety": "node --test tests/child-safety.test.mjs",
-    "check:server": "node --test tests/server-boundary.test.mjs tests/lan-access.test.mjs tests/paired-server-boundary.test.mjs",
+    "check:server": "node --test tests/server-boundary.test.mjs tests/lan-access.test.mjs tests/paired-server-boundary.test.mjs tests/public-server.test.mjs tests/rtc-llm.test.mjs tests/rtc-call.test.mjs",
     "check:browser": "node --test tests/browser-runtime.test.mjs && node scripts/run-critical-browser-checks.mjs",
     "check:release": "npm run check && npm run check:browser",
     "eval:model": "node scripts/benchmark-real-model.mjs --live --allow-paid-api",
@@ -30,7 +30,9 @@
     "voice:probe-onset": "node scripts/probe-asr-onset.mjs",
     "voice:probe-tts": "node scripts/probe-tts-first-frame.mjs",
     "voice:probe-llm": "node scripts/probe-llm-first-sentence.mjs",
-    "pilot:lan": "node scripts/run-pilot-lan.mjs"
+    "pilot:lan": "node scripts/run-pilot-lan.mjs",
+    "rtc:llm": "node server/rtcLlmServer.mjs",
+    "rtc:package": "node scripts/package-rtc-llm.mjs"
   },
   "dependencies": {
     "@livekit/agents": "1.9.5",
