@@ -33,16 +33,22 @@
 
 请通过服务打开页面，不要直接双击 `index.html`；模块、接口和语音能力需要正确的浏览器运行环境。没有 `.env` 和真实密钥时只提供本地规则与界面验证。
 
-如果页面显示的是旧测试数据，可以点页面里的“清空本地数据”，或在浏览器开发者工具里清掉 localStorage 后刷新。
+开发验证请使用独立浏览器上下文和合成数据。真实家庭的本机记录需要先从备份页完整导出；不要通过开发者工具直接清掉 localStorage 排查显示问题。
 
 当前标准流程是：家长首次填写孩子昵称、年龄并同意本机保存 → 家庭之后从首页直接开始自由对话 → 孩子或已登记的家人使用语音，小宇按需使用白板 → 家庭自然结束 → 家长查看三张本次小结卡、周/月回看和成长时间线。第一版每个家庭只有 1 个主孩子成长档案，另外最多登记 6 位家长、祖辈或照护者；多孩子档案以后再增加。当前由家庭手动确认说话人，自动音色识别尚未接通。家长还可以设置可选的 4 位本地家长码。新用户不会预填兴趣、能力、误区或成长结论。
 
 产品整体方向已经扩展为 0-6 岁，但当前可运行界面仍主要验证 3-6 岁孩子直接语音。0-3 岁将采用家长辅助记录和亲子互动模式，不会让婴儿直接使用同一套孩子界面。完整状态和顺序见 `docs/development-log.md`。
 
+## 维护入口
+
+- [开发与测试导航](docs/maintenance.md)：测试选择、正式页面与实验入口、生成文件，以及本地待提交的模块拆分导航。
+- [本地改动分组](docs/changes/2026-11-14-housekeeping.md)：当前混合工作区的审查顺序与共享文件；不是提交清单。
+- [设计样板索引](design-drafts/README.md)：已采用、探索中和历史参考。
+
 ## 你最可能会改的地方
 
 - 改首页文案和按钮：`index.html`
-- 改整体视觉风格：`src/styles/base.css`
+- 改整体视觉风格：先看 `DESIGN.md`，共享覆盖在 `src/styles/design-system.css`，基础样式在 `src/styles/base.css`
 - 改卡片、白板、对话区域样式：`src/styles/components.css`
 - 改手机适配：`src/styles/responsive.css`
 - 改语音识别/朗读：`src/services/voiceService.js`
@@ -120,7 +126,7 @@ npm start
 
 注意：`OPENAI_API_KEY` 不要填阿里云 key。它只用于未来 OpenAI 语音转写测试；如果不用 OpenAI，保持为空。
 
-普通自动检查运行 `npm run check`。准备交付或合并前运行 `npm run check:release`，它会额外启动隔离服务并执行正式页面、对话、安全和开放画图四条浏览器流程；Playwright 已固定为开发依赖，首次使用仍需安装 Chromium。该检查不会调用真实模型 API。
+普通自动检查运行 `npm run check`。准备交付或合并前运行 `npm run check:release`，它会额外启动本机测试服务并执行全部关键浏览器流程，最后汇总失败项；Playwright 已固定为开发依赖，首次使用仍需安装 Chromium。用 `npm run check:browser -- --list` 查看流程，用 `npm run check:browser -- --only production-design drawing-races` 单独排查；单项通过不代表发布检查通过。测试使用合成数据与接口替身，不代表真实模型、RTC 服务或手机验收。详见 [开发与测试导航](docs/maintenance.md)。
 
 真实模型比较使用 `npm run eval:model`；包含付费图片创建和编辑时使用 `npm run eval:model:images`。命令只使用固定的虚构场景，结果写入本地忽略目录，且仍需人工复核。完整发布门槛、费用记录方式、真机和家庭试用流程见 `docs/quality-validation.md`。
 

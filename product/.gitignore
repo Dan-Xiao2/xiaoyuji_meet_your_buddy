@@ -38,3 +38,7 @@ src/voice-lab/client.bundle.js
 
 # Local HTTPS certificates and access code for the home-network pilot (npm run pilot:lan)
 .certs/
+
+# Generated RTC SDK bundles (npm run rtc:build); keep their entry files and lockfile.
+src/rtc/aicall.bundle.js
+src/rtc/aicall-v25.bundle.js

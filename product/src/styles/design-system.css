@@ -115,7 +115,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .growth-segments input { position: absolute; inset: 0; margin: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 .growth-date-stepper { display: flex; align-items: center; gap: 4px; }
 .growth-date-stepper button { width: 48px; height: 48px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; border-radius: 8px; color: var(--ink); }
-.growth-date-stepper span { min-width: 130px; text-align: center; font-size: 14px; }
+/* The date between the arrows only: the arrows' own spans stay the size of their buttons. */
+.growth-date-stepper > span { min-width: 130px; text-align: center; font-size: 14px; }
 .growth-discovery-card { display: block; min-height: 0; padding: 28px 0; margin: 0 0 32px; border: 0; border-block: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
 .growth-discovery-card p { margin: 0 0 8px; font-size: 14px; font-weight: 400; }
 .growth-discovery-card h2 { font-size: 20px; line-height: 1.65; font-weight: 500; max-width: 760px; }

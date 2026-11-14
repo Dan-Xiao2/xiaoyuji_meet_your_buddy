@@ -1605,14 +1605,14 @@ dom.mainVoiceButton.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   dom.mainVoiceButton.setPointerCapture?.(event.pointerId);
   voicePointerStopsExisting = voiceSession.getSnapshot().input === "capturing";
-  voicePressStartedAt = window.performance.now();
+  voicePressStartedAt = event.timeStamp || window.performance.now();
   if (voicePointerStopsExisting) return;
   voiceSession.beginInput();
 });
 
 dom.mainVoiceButton.addEventListener("pointerup", (event) => {
   event.preventDefault();
-  const pressDuration = window.performance.now() - voicePressStartedAt;
+  const pressDuration = (event.timeStamp || window.performance.now()) - voicePressStartedAt;
   if (shouldFinishVoiceOnRelease({ wasAlreadyListening: voicePointerStopsExisting, pressDurationMs: pressDuration })) {
     voiceSession.finishInput();
   }

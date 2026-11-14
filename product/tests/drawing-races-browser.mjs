@@ -35,6 +35,12 @@ async function fixture(width, mode, hold) {
       /\/api\/whiteboard\/(route|plan)$/.test(String(url)) ? { ...options, signal: undefined } : options);
   }, { state, key });
   page.on("pageerror", error => errors.push(error.message));
+  // Prepare the synthetic image before any delayed request; teardown must not evaluate a closed page.
+  const image = await page.evaluate(() => {
+    const canvas = document.createElement("canvas"); canvas.width = 32; canvas.height = 32;
+    const ctx = canvas.getContext("2d"); ctx.fillStyle = "#93b69b"; ctx.fillRect(0, 0, 32, 32);
+    return canvas.toDataURL("image/png");
+  });
   let imageCalls = 0;
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
@@ -56,11 +62,7 @@ async function fixture(width, mode, hold) {
       imageCalls++;
       started.image.resolve();
       await gates.image.promise;
-      result = { ok: true, image: await page.evaluate(() => {
-        const canvas = document.createElement("canvas"); canvas.width = 32; canvas.height = 32;
-        const ctx = canvas.getContext("2d"); ctx.fillStyle = "#93b69b"; ctx.fillRect(0, 0, 32, 32);
-        return canvas.toDataURL("image/png");
-      }) };
+      result = { ok: true, image };
     } else if (path === "/api/tutor/quick") result = { reply: "我们接着聊。", llmStatus: { used: true } };
     else if (path === "/api/tutor") result = { ...body.state, growthEvidence: { shouldSave: false } };
     try { await route.fulfill({ contentType: "application/json", body: JSON.stringify(result) }); } catch {}
@@ -94,7 +96,8 @@ async function run(width, name, mode, hold, check) {
   } finally {
     clearTimeout(timer);
     Object.values(f.gates).forEach(gate => gate.resolve());
-    await f.context.close();
+    try { await f.page.unrouteAll({ behavior: "wait" }); }
+    finally { await f.context.close(); }
   }
 }
 
